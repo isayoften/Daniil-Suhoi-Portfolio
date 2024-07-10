@@ -1,5 +1,7 @@
 # Metric and Relative Monocular Depth Estimation: An Overview. Fine-Tuning Depth Anything V2 👐 📚
 
+Hugging Face [article](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide)
+
 ## Evolution of Models
 
 Over the past decade, monocular depth estimation models have undergone remarkable advancements. Let's take a visual journey through this evolution.
