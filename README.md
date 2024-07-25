@@ -20,4 +20,4 @@ DL Engineer and Researcher
 - ...........
 ## Проекты:
 - Блог-пост на hugging face (разработчик из Google и HF поставил upvote!) [Metric and Relative Monocular Depth Estimation: An Overview. Fine-Tuning Depth Anything V2](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide)
-- [Optimization Rush](/Optimization Rush). Fine-tunning Llama-3-8B на 1xA100 для генерации кулинарных рецептов. Цель - выжать все соки из слова "оптимизация"
+- [Optimization Rush](Optimization Rush). Fine-tunning Llama-3-8B на 1xA100 для генерации кулинарных рецептов. Цель - выжать все соки из слова "оптимизация"
