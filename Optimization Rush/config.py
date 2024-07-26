@@ -3,7 +3,7 @@ from transformers import BitsAndBytesConfig
 from peft import LoraConfig
 
 
-model_id = "meta-llama/Meta-Llama-3-8B"
+model_id = "meta-llama/Meta-Llama-3.1-8B"
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_use_double_quant=True,
@@ -19,14 +19,14 @@ lora_config = LoraConfig(
     target_modules='all-linear'
 )
 
-batch_size = 64
-lr = 3e-4
+batch_size = 8
+lr = 1e-4
 num_steps = 20
 logging_and_saving_state_step = 5
 load_state = False
 
-# warmup_steps = 200
-# scheduler_rate = 1.5
+warmup_ratio = 0.05
+scheduler_rate = 2
 
 seed = 42
 mixed_precision = "bf16"

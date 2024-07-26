@@ -34,7 +34,7 @@ data = data.filter(
     and len(x["NER"].split(", ")) >= 3
     and len(x["NER"].split(", ")) <= 15
     and len(x["directions"].split("\n")) >= 2
-    and all(ingr_count[ingredient] >= 50 for ingredient in x["NER"].split(", ")),
+    and all(ingr_count[ingredient] >= 100 for ingredient in x["NER"].split(", ")),
     num_proc=os.cpu_count(),
 )
 
@@ -58,29 +58,17 @@ data = data.map(
     num_proc=os.cpu_count(),
 )
 
-train_test = data["train"].train_test_split(test_size=0.05, seed=42)
-
-test_val = train_test["test"].train_test_split(test_size=0.5, seed=42)
-
-data = datasets.DatasetDict(
-    {
-        "train": train_test["train"],
-        "validation": test_val["train"],
-        "test": test_val["test"],
-    }
-)
+train_test = data["train"].train_test_split(test_size=0.1, seed=42)
 
 # sort dataset for efficient batching
-data = data.map(
+train_test = train_test.map(
     lambda batch: {"lens": [len(x) for x in batch["input_ids"]]},
     batched=True,
     num_proc=os.cpu_count(),
 )
-data["train"] = data["train"].sort("lens")
-data["validation"] = data["validation"].sort("lens")
-data["test"] = data["test"].sort("lens")
-data = data.remove_columns(["lens"])
+train_test["train"] = train_test["train"].sort("lens")
+train_test["test"] = train_test["test"].sort("lens")
+train_test = train_test.remove_columns(["lens"])
+train_test = train_test.with_format("torch")
 
-data = data.with_format("torch")
-
-data.save_to_disk("processed_dataset")
+train_test.save_to_disk("processed_dataset")
