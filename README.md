@@ -15,9 +15,16 @@ DL Engineer and Researcher
    - **RL**: этого зверя я оставлю напоследок. Имею базовое понимание.
    - **Общие методики**: transfer learning; распределенные вычисления - DDP, FSDP; миллион видов оптимизации: квантизация, mixed precision, LoRa, gradient checkpointing, JIT-компиляция, ONNX и тд; умение стряпать произвольные архитектуры.
 ### Стек
-- Основное это, конечно же, **Pytorch**. Также большим плюсом хочу отметить отличное знание экосистемы **Hugging Face** - имею большой опыт использования их библиотеками **transformers, datasets, accelerate, peft** ............
-- ............
-- ...........
+- Основное это, конечно же, **Pytorch**. Также большим плюсом хочу отметить отличное знание экосистемы **Hugging Face** - имею большой опыт работы с их библиотеками. Дальше по мелочи типа sklearn, numpy, pandas, matplotlib, albumentations, FAISS и тд. 
+- Базовое владение Git и Docker.
+- Умение работать С Linux. В процессе арендовывания вычислительных мощностей подключался по SSH к облачным серверам на Linux и работал через терминал и VS code.
+- В вузе были очень требовательные преподаватели по БД, так что хорошо знаю SQL)
 ## Проекты:
-- Блог-пост на hugging face (разработчик из Google и HF поставил upvote!) [Metric and Relative Monocular Depth Estimation: An Overview. Fine-Tuning Depth Anything V2](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide)
+- Статья на hugging face (ее оценили несколько крупных разработчиков и даже сам автор статьи про Depth Anything) [Metric and Relative Monocular Depth Estimation: An Overview. Fine-Tuning Depth Anything V2](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide)
 - [Optimization Rush](Optimization Rush). Fine-tunning Llama-3-8B на 1xA100 для генерации кулинарных рецептов. Цель - выжать все соки из слова "оптимизация"
+## Курсы:
+- Пройдена дополнительная профессиональная программа повышения квалификации по ИИ от вуза. Справка в файлах............
+- 1 и 2 часть курса Deep Learning School от ФПМИ МФТИ. https://dls.samcs.ru/courses
+- NLP курс от ШАД. https://github.com/yandexdataschool/nlp_course
+- Курсы по NLP и CV от Hugging Face. https://huggingface.co/learn
+- А также прочитано огромное количество научных (и не только) статей и просмотрено несчетное множество лекций и гайдов на ютубе. Еще из интересного могу отметить учебник по ML от Яндекса https://education.yandex.ru/handbook/ml
