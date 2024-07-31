@@ -22,8 +22,8 @@
 - [Optimization Rush](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/ab1a71f328abc4a0f234fab605698f04aea192ea/Optimization%20Rush). Fine-tunning Llama-3-70B на 2xA100 для генерации кулинарных рецептов. Цель - максимально глубоко и подробно погрузиться в оптимизацию LLM (в работе)
 - [Научная работа](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/ab1a71f328abc4a0f234fab605698f04aea192ea/Peritonit) с патентом и призовыми местами на международных научных конференциях. 
 ## Образование и курсы:
-- Студент 4 курса ПГНИУ по направлению ПМИ. [Средний балл - 4.7.]([https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/c33138e66f5b831107555e3c65c4fe3e2df645b6/Additional%20files](https://github.com/isayoften/Daniil-Suhoi-Portfolio/blob/f12ebc5335c5ef41ef00812bf9be1152063eaa1f/Additional%20files/Scores.png))
-- [Профессиональная программа повышения квалификации]([https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/c33138e66f5b831107555e3c65c4fe3e2df645b6/Additional%20files](https://github.com/isayoften/Daniil-Suhoi-Portfolio/blob/f12ebc5335c5ef41ef00812bf9be1152063eaa1f/Additional%20files/%D0%9F%D0%BE%D0%B2%D1%8B%D1%88%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%BA%D0%B2%D0%B0%D0%BB%D0%B8%D1%84%D0%B8%D0%BA%D0%B0%D1%86%D0%B8%D0%B8.jpg)) по ИИ от университета. 
+- Студент 4 курса ПГНИУ по направлению ПМИ. [Средний балл - 4.7.](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/b49b5816d250e5cecef78342c772ad88d6714755/Additional%20files)
+- [Профессиональная программа повышения квалификации](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/b49b5816d250e5cecef78342c772ad88d6714755/Additional%20files) по ИИ от университета. 
 - [Deep Learning School от ФПМИ МФТИ](https://dls.samcs.ru/courses) (обе части)
 - [NLP курс от ШАД.](https://github.com/yandexdataschool/nlp_course)
 - [Курсы по NLP и CV от Hugging Face.](https://huggingface.co/learn)
