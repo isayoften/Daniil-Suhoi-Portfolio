@@ -21,7 +21,8 @@ DL Engineer and Researcher
 - В вузе были очень требовательные преподаватели по БД, так что хорошо знаю SQL)
 ## Проекты:
 - Статья на hugging face (ее оценили несколько крупных разработчиков и даже сам автор статьи про Depth Anything) [Metric and Relative Monocular Depth Estimation: An Overview. Fine-Tuning Depth Anything V2](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide)
-- [Optimization Rush](Optimization Rush). Fine-tunning Llama-3-8B на 1xA100 для генерации кулинарных рецептов. Цель - выжать все соки из слова "оптимизация"
+- [Optimization Rush](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/ab1a71f328abc4a0f234fab605698f04aea192ea/Optimization%20Rush). Fine-tunning Llama-3-8B на 1xA100 для генерации кулинарных рецептов. Цель - выжать все соки из слова "оптимизация"
+- [Научная работа](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/ab1a71f328abc4a0f234fab605698f04aea192ea/Peritonit) с патентом и призовыми местами на международных научных конференциях. 
 ## Курсы:
 - Пройдена дополнительная профессиональная программа повышения квалификации по ИИ от вуза. Справка в файлах............
 - 1 и 2 часть курса Deep Learning School от ФПМИ МФТИ. https://dls.samcs.ru/courses
