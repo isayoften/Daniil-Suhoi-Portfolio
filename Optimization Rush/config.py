@@ -13,22 +13,20 @@ bnb_config = BitsAndBytesConfig(
 
 lora_config = LoraConfig(
     r=8,
-    lora_alpha=32,
-    lora_dropout=0.1,
+    lora_dropout=0.05,
     task_type="CAUSAL_LM",
-    target_modules='all-linear'
+    target_modules='all-linear' #highly reccomends using 'all-linear' in the paper
 )
 
-batch_size = 8
-lr = 1e-4
-num_steps = 20
-logging_and_saving_state_step = 5
+batch_size = 16
+lr = 3e-4
+num_epochs = 5
 load_state = False
 
-warmup_ratio = 0.05
-scheduler_rate = 2
+warmup_ratio = 0.1
+scheduler_rate = 1.5
 
 seed = 42
-mixed_precision = "bf16"
+mixed_precision = "bf16" #A100 can run bf16
 gradient_accumulation_steps = 1
-gradient_checkpointing = False
+gradient_checkpointing = True

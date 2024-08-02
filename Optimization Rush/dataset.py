@@ -3,16 +3,6 @@ import datasets
 import random
 from transformers import DataCollatorForLanguageModeling, AutoTokenizer
 import os
-import config
-
-# tokenizer = AutoTokenizer.from_pretrained(config.model_id)
-# tokenizer.pad_token_id = tokenizer.eos_token_id
-# data = datasets.load_from_disk("processed_dataset")
-
-
-# for out in tokenizer.batch_decode(data['train'].shuffle(42).select(range(10))['input_ids']):
-#     print()
-#     print(out)
 
 
 def load_dataset(path):
