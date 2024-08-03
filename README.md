@@ -15,7 +15,7 @@
 - **PyTorch**: Основной фреймворк, умение писать произвольные loop'ы и свои архитектуры. Хорошие знания экосистемы Hugging Face и большой опыт работы с их библиотеками. Дополнительные инструменты: sklearn, numpy, pandas, matplotlib, albumentations, FAISS, sentence-transformers и др.
 - **Git, Docker**
 - **Linux**: Опыт работы с облачными серверами через SSH, использование терминала и VS Code.
-- **SQL, Vector DB**
+- **SQL**
 ## Проекты:
 - [Статья на Hugging Face](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide). Оценена очень крупными разработчиками.
 - [Optimization Rush](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/ab1a71f328abc4a0f234fab605698f04aea192ea/Optimization%20Rush). Fine-tunning Llama-3-70B на 2xA100 для генерации кулинарных рецептов. Цель - максимально глубоко и подробно погрузиться в оптимизацию LLM (в работе)
