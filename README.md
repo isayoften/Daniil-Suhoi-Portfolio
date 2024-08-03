@@ -18,11 +18,11 @@
 - **SQL**
 ## Проекты:
 - [Статья на Hugging Face](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide). Оценена очень крупными разработчиками.
-- [Optimization Rush](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/ab1a71f328abc4a0f234fab605698f04aea192ea/Optimization%20Rush). Fine-tunning Llama-3-70B на 2xA100 для генерации кулинарных рецептов. Цель - максимально глубоко и подробно погрузиться в оптимизацию LLM (в работе)
-- [Научная работа](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/ab1a71f328abc4a0f234fab605698f04aea192ea/Peritonit) с патентом и призовыми местами на международных научных конференциях. 
+- [Optimization Rush](Optimization%20Rush/). Fine-tunning Llama-3-70B на 2xA100 для генерации кулинарных рецептов. Цель - максимально глубоко и подробно погрузиться в оптимизацию LLM (в работе)
+- [Научная работа](Peritonit/) с патентом и призовыми местами на международных научных конференциях. 
 ## Образование и курсы:
-- Студент 4 курса ПГНИУ по направлению ПМИ. [Средний балл - 4.7.](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/b49b5816d250e5cecef78342c772ad88d6714755/Additional%20files)
-- [Профессиональная программа повышения квалификации](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/b49b5816d250e5cecef78342c772ad88d6714755/Additional%20files) по ИИ от университета. 
+- Студент 4 курса ПГНИУ по направлению ПМИ. [Средний балл - 4.7.](Additional%20files/)
+- [Профессиональная программа повышения квалификации](Additional%20files/) по ИИ от университета. 
 - [Deep Learning School от ФПМИ МФТИ](https://dls.samcs.ru/courses) (обе части)
 - [NLP курс от ШАД.](https://github.com/yandexdataschool/nlp_course)
 - [Курсы по NLP и CV от Hugging Face.](https://huggingface.co/learn)
