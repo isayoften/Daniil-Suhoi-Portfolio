@@ -29,7 +29,7 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(
         config.model_id,
         quantization_config=config.bnb_config,
-        low_cpu_mem_usage=True,
+        # low_cpu_mem_usage=True,
         torch_dtype=torch.bfloat16,
     )
     model.config.pad_token_id = tokenizer.pad_token_id    
@@ -64,16 +64,13 @@ def main():
         model, optim, train_dataloader, val_dataloader, scheduler
     )
 
-    if config.load_state:
-        accelerator.load_state("last_state")
-
     best_val = 1e10
 
     for epoch in range(config.num_epochs):
 
         model.train()
         train_loss = 0
-        for batch in tqdm(train_dataloader):
+        for i, batch in enumerate(tqdm(train_dataloader)):
             with accelerator.accumulate(model):
                 optim.zero_grad()
 
@@ -83,28 +80,31 @@ def main():
                 scheduler.step()
 
                 train_loss += loss.detach()
+                
 
-        train_loss /= len(train_dataloader)
+            if i!=0 and i % config.log_step == 0:
 
-        model.eval()
-        val_loss = 0
-        for batch in tqdm(val_dataloader):
-            with torch.no_grad():
-                loss = model(**batch).loss
-                val_loss += loss.detach()
+                train_loss /= config.log_step
 
-        val_loss /= len(val_dataloader)
+                model.eval()
+                val_loss = 0
+                for batch in tqdm(val_dataloader):
+                    with torch.no_grad():
+                        loss = model(**batch).loss
+                        val_loss += loss.detach()
+                        
+                val_loss /= len(val_dataloader)
 
-        print(f"Epoch  {epoch}; Train_loss = {train_loss}, Val_loss = {val_loss}")
-        
-        accelerator.save_state("last_state")
-        
-        if val_loss < best_val:
-            best_val = val_loss
-            accelerator.unwrap_model(model).save_pretrained(
-                "model",
-                save_function=accelerator.save,
-            )
+                print(f"Train_loss = {train_loss}, Val_loss = {val_loss}")
+                
+                if val_loss < best_val:
+                    best_val = val_loss
+                    accelerator.unwrap_model(model).save_pretrained(
+                        "model1",
+                        save_function=accelerator.save,
+                    )
+                train_loss = 0
+                model.train()
 
 
 if __name__ == "__main__":

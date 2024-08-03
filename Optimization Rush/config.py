@@ -18,15 +18,15 @@ lora_config = LoraConfig(
     target_modules='all-linear' #highly reccomends using 'all-linear' in the paper
 )
 
-batch_size = 16
-lr = 3e-4
-num_epochs = 5
-load_state = False
+batch_size = 64
+lr = 2e-4
+num_epochs = 1
+log_step = 100
 
-warmup_ratio = 0.1
+warmup_ratio = 0.05
 scheduler_rate = 1.5
 
 seed = 42
-mixed_precision = "bf16" #A100 can run bf16
+mixed_precision = "bf16" #Ampere+ series can run bf16
 gradient_accumulation_steps = 1
 gradient_checkpointing = True
