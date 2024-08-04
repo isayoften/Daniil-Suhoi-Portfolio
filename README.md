@@ -17,7 +17,7 @@
 - **Linux**: Опыт работы с облачными серверами через SSH, использование терминала и VS Code.
 - **SQL**
 ## Проекты:
-- [Статья на Hugging Face](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide). Оценена очень крупными разработчиками.
+- [Статья на Hugging Face](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide). Оценена очень крупными разработчиками и исследователями.
 - [Optimization Rush](Optimization%20Rush/). Fine-tunning Llama-3-70B на 2xA100 для генерации кулинарных рецептов. Цель - максимально глубоко и подробно погрузиться в оптимизацию LLM (в работе)
 - [Научная работа](Peritonit/) с патентом и призовыми местами на международных научных конференциях. 
 ## Образование и курсы:
