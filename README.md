@@ -18,7 +18,7 @@
 - **SQL**
 ## Проекты:
 - [Статья на Hugging Face](https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide). Оценена очень крупными разработчиками и исследователями.
-- [Optimization Rush](Optimization%20Rush/). Fine-tunning Llama-3-70B на 2xA100 для генерации кулинарных рецептов. Цель - максимально глубоко и подробно погрузиться в оптимизацию LLM (в работе)
+- [Optimization Rush](Optimization%20Rush/). Fine-tunning Llama-3-70B. Цель - максимально глубоко и подробно погрузиться в оптимизацию LLM (в работе)
 - [Научная работа](Peritonit/) с патентом и призовыми местами на международных научных конференциях. 
 ## Образование и курсы:
 - Студент 4 курса ПГНИУ по направлению ПМИ. [Средний балл - 4.7.](Additional%20files/)
