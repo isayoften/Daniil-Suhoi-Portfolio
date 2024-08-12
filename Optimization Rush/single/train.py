@@ -1,110 +1,52 @@
 from tqdm import tqdm
 import transformers
 import torch
+from datasets import load_from_disk
 
 
-from accelerate import Accelerator
-from accelerate.utils import set_seed
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    DataCollatorForLanguageModeling,
+)
 
-from peft import get_peft_model, prepare_model_for_kbit_training
-import bitsandbytes as bnb
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from trl import SFTTrainer, SFTConfig
 
-
-from dataset import get_dataloader, load_dataset
 import config
 
 
 def main():
 
-    set_seed(config.seed)
-    accelerator = Accelerator(
-        mixed_precision=config.mixed_precision,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
-    )
-
     tokenizer = AutoTokenizer.from_pretrained(config.model_id)
-    tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids("<|finetune_right_pad_id|>")
+    tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(
+        "<|finetune_right_pad_id|>"
+    )
 
     model = AutoModelForCausalLM.from_pretrained(
         config.model_id,
         quantization_config=config.bnb_config,
-        # low_cpu_mem_usage=True,
         torch_dtype=torch.bfloat16,
+        use_cache=False,
     )
-    model.config.pad_token_id = tokenizer.pad_token_id    
+    model.config.pad_token_id = tokenizer.pad_token_id
 
-    model = prepare_model_for_kbit_training(
-        model, use_gradient_checkpointing=config.gradient_checkpointing
-    )
-    model = get_peft_model(model, config.lora_config)
-    model.print_trainable_parameters()
-    model.config.use_cache = False
+    data = load_from_disk("processed_dataset")
 
-    optim = bnb.optim.PagedAdamW8bit(model.parameters(), lr=config.lr)
+    training_args = SFTConfig(**config.training_args)
 
-    data = load_dataset("processed_dataset")
-    train_dataloader = get_dataloader(
-        dataset=data["train"], batch_size=config.batch_size, tokenizer=tokenizer
-    )
-    val_dataloader = get_dataloader(
-        dataset=data["test"], batch_size=config.batch_size, tokenizer=tokenizer
-    )
-    scheduler = transformers.get_cosine_schedule_with_warmup(
-        optim,
-        num_warmup_steps=config.num_epochs
-        * len(train_dataloader)
-        * config.warmup_ratio,
-        num_training_steps=config.num_epochs
-        * len(train_dataloader)
-        * config.scheduler_rate,
+    trainer = SFTTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=data["train"],
+        eval_dataset=data["test"],
+        tokenizer=tokenizer,
+        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
+        peft_config=config.lora_config,
     )
 
-    model, optim, train_dataloader, val_dataloader, scheduler = accelerator.prepare(
-        model, optim, train_dataloader, val_dataloader, scheduler
-    )
+    trainer.train(resume_from_checkpoint=config.resume_training)
 
-    best_val = 1e10
-
-    for epoch in range(config.num_epochs):
-
-        model.train()
-        train_loss = 0
-        for i, batch in enumerate(tqdm(train_dataloader)):
-            with accelerator.accumulate(model):
-                optim.zero_grad()
-
-                loss = model(**batch).loss
-                accelerator.backward(loss)
-                optim.step()
-                scheduler.step()
-
-                train_loss += loss.detach()
-                
-
-            if i!=0 and i % config.log_step == 0:
-
-                train_loss /= config.log_step
-
-                model.eval()
-                val_loss = 0
-                for batch in tqdm(val_dataloader):
-                    with torch.no_grad():
-                        loss = model(**batch).loss
-                        val_loss += loss.detach()
-                        
-                val_loss /= len(val_dataloader)
-
-                print(f"Train_loss = {train_loss}, Val_loss = {val_loss}")
-                
-                if val_loss < best_val:
-                    best_val = val_loss
-                    accelerator.unwrap_model(model).save_pretrained(
-                        "model1",
-                        save_function=accelerator.save,
-                    )
-                train_loss = 0
-                model.train()
+    trainer.save_model()
 
 
 if __name__ == "__main__":

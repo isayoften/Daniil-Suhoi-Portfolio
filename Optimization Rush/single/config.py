@@ -1,6 +1,7 @@
 import torch
 from transformers import BitsAndBytesConfig
 from peft import LoraConfig
+import os
 
 
 model_id = "meta-llama/Meta-Llama-3.1-8B"
@@ -12,21 +13,32 @@ bnb_config = BitsAndBytesConfig(
 )
 
 lora_config = LoraConfig(
-    r=8,
-    lora_dropout=0.05,
-    task_type="CAUSAL_LM",
-    target_modules='all-linear' #highly reccomends using 'all-linear' in the paper
+    r=8, lora_dropout=0.05, task_type="CAUSAL_LM", target_modules="all-linear"
 )
 
-batch_size = 64
-lr = 2e-4
-num_epochs = 1
-log_step = 100
+training_args = {
+    "output_dir": "model",
+    "per_device_train_batch_size": 64,
+    "per_device_eval_batch_size": 128,
+    "gradient_accumulation_steps": 1,
+    "learning_rate": 3e-4,
+    "weight_decay": 1e-3,
+    "num_train_epochs": 1,
+    "lr_scheduler_type": "cosine",
+    "warmup_ratio": 0.1,
+    "logging_steps": 0.3,
+    "eval_strategy": "steps",
+    "log_level": "info",
+    "save_strategy": "steps",
+    "save_steps": 0.3,
+    "save_total_limit": 1,
+    "bf16": True,
+    "dataloader_num_workers": os.cpu_count(),
+    "optim": "paged_adamw_8bit",
+    "group_by_length": True,
+    "gradient_checkpointing": True,
+    "gradient_checkpointing_kwargs": {"use_reentrant": False},
+    "max_seq_length": 64,
+}
 
-warmup_ratio = 0.05
-scheduler_rate = 1.5
-
-seed = 42
-mixed_precision = "bf16" #Ampere+ series can run bf16
-gradient_accumulation_steps = 1
-gradient_checkpointing = True
+resume_training = False
