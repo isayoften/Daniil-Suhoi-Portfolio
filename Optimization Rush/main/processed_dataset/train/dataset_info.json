@@ -1,0 +1,68 @@
+{
+  "builder_name": "csv",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "quotes",
+  "dataset_size": 6727124,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/mxy680/quotes@8027a1f6d4d3b9e711d01ef79f2c2e37099c121d/train.csv": {
+      "num_bytes": 4461843,
+      "checksum": null
+    },
+    "hf://datasets/mxy680/quotes@8027a1f6d4d3b9e711d01ef79f2c2e37099c121d/validation.csv": {
+      "num_bytes": 495774,
+      "checksum": null
+    },
+    "hf://datasets/mxy680/quotes@8027a1f6d4d3b9e711d01ef79f2c2e37099c121d/test.csv": {
+      "num_bytes": 1241775,
+      "checksum": null
+    }
+  },
+  "download_size": 6199392,
+  "features": {
+    "input_ids": {
+      "feature": {
+        "dtype": "int32",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
+    },
+    "attention_mask": {
+      "feature": {
+        "dtype": "int8",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 12926516,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 4841861,
+      "num_examples": 52492,
+      "dataset_name": "quotes"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 537964,
+      "num_examples": 5833,
+      "dataset_name": "quotes"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 1347299,
+      "num_examples": 14582,
+      "dataset_name": "quotes"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
