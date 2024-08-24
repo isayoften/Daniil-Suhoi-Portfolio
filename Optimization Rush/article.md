@@ -4,67 +4,69 @@
 
 Training large language models (LLMs) requires significant computational resources and time. However, by optimizing the training process, it's possible to cut costs, speed up development, and improve the model's overall performance. This guide offers a detailed exploration of various optimization strategies, covering everything from choosing the right model to refining the learning process.
 
-## 0. Небольшое введение в типы данных
-Давайте для начала вкратце разберем, как числа представляются в компьютере и какие разновидности данного представления существуют. Нам это очень сильно понадобится в дальнейшем для понимания потребления памяти во время обучения моделей.
+## 0. Introduction to Data Types
+Before diving into the intricacies of model training, let's briefly explore how numbers are represented in a computer and the different types of data representations available. This foundational knowledge is crucial for understanding memory consumption during model training.
 
 ### Int16/Int8/Int4
-Самые обыкновенные целочисленные типы. Диапазон значений - \\([-2^{n-1}, 2^{n-1} - 1]\\)
+These are standard integer types. The range of values they can represent is given by \\([-2^{n-1}, 2^{n-1} - 1]\\)
 
-Схематично битовое представление Int16 можно показать так: 1 бит знака и 15 бит на значение.
+A schematic representation of an Int16 bit layout can be shown as: 1 sign bit and 15 value bits.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/WY7E6uMR73aigsfcsCq8H.png)
 
-Чем больше битов, тем точнее можно представить диапазон значений.
+The more bits used, the larger the range of values that can be represented.
 
 ### Float32
-Здесь битовое представление выглядит так: 1 бит знака, 8 — экспоненты, 23 — мантиссы.
+In Float32, the bit layout is as follows: 1 sign bit, 8 exponent bits, and 23 mantissa bits.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/KSS-oRLsPUnQ9Vypo7UZp.png)
 
-Формула:
+The formula for the value is:
 $$ v = (-1)^{\text{sign}} \cdot 2^{E-127} \cdot \left(1 + \sum_{i=1}^{23} b_{23-i}2^{-i}\right) $$
 
-Ключевая идея вещественных типов: чем больше битов выделено под экспоненту, тем больший диапазон значений можно представить. Биты, оставшиеся для мантиссы, отвечают за точность, с которой представлены значения в диапазоне.
+The key idea behind floating-point types is that more bits allocated to the exponent allow a wider range of values, while the bits allocated to the mantissa determine the precision within that range.
 
 ### Float16
-Битовое представление: 1 бит знака, 5 — экспоненты и 10 — мантиссы.
+The Float16 format uses 1 sign bit, 5 exponent bits, and 10 mantissa bits.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/bX17lqakEY903HrSCZF-c.png)
 
-Главная проблема float16 — маленький диапазон значений. Максимальное значение равно 65504, из-за чего тензоры активаций легко переполняются.
+The main drawback of Float16 is its limited range of values, with a maximum of 65504, making it prone to overflow in activation tensors.
 
 ### Bfloat16, или brain float
-Специальный формат данных, разработанный Google Brain. Можно рассматривать как аппроксимацию float32. Битовое представление такое: 1 бит знака, 8 — экспоненты и 7 — мантиссы.
+Bfloat16 is a specialized data format developed by Google Brain. It can be considered an approximation of Float32. The bit layout is 1 sign bit, 8 exponent bits, and 7 mantissa bits..
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/jeGGZP2DxQfXZZuB72iRD.png)
 
-Обратите внимание, что число битов под экспоненту совпадает с представлением float32. Значит, bfloat16 представляет тот же диапазон значений, пусть и менее точно. Зато можно меньше опасаться переполнений в активациях.
+Notice that the number of exponent bits is the same as in Float32, meaning bfloat16 can represent the same range of values, albeit with less precision. This reduces the risk of overflow in activation
 
-Другая приятная особенность bf16 — возможность быстро конвертировать значения во float32. Магия работает благодаря сходному битовому представлению. К сожалению, пока что не всё железо работает с этим типом (особенно мобильное).
+Another advantage of bf16 is the ease of converting values to Float32. This is possible because of the similar bit layout. However, not all hardware currently supports this type, especially in mobile devices.
 
 ### TensorFloat32
 
-Интересный 19-битный [тип данных](https://blogs.nvidia.com/blog/tensorfloat-32-precision-format/) от NVidia. Поддерживается в архитектурах, начиная с NVidia Ampere (A-100). Битовое представление: 1 бит знака, 8 — экспоненты, 10 — мантиссы.
+TensorFloat32 is an interesting 19-bit data type introduced by NVidia, supported on architectures starting with NVidia Ampere (A-100). Its bit layout consists of 1 sign bit, 8 exponent bits, and 10 mantissa bits.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/ha7W9jLH-O1BvMrG5cAQf.png)
 
-Ключевые особенности:
-- число битов экспоненты совпадает с bfloat16, а значит и с float32;
-- число битов мантиссы совпадает с float16.
+Key features:
+- The number of exponent bits matches bfloat16, and therefore Float32 as well.
+- The number of mantissa bits matches Float16.
 
-Получился необычный, но точный и эффективный тип данных. Показывает отличные результаты по производительности вычислений и подходит для обучения моделей. Но существует только на современных видеокартах NVidia.
+This results in an unusual but highly efficient and precise data type. It delivers excellent computational performance and is suitable for model training, although it's only available on modern NVidia GPUs.
 
 ### E4M3 и E5M2
-Новые 8-битные float. Предложены NVidia, ARM и Intel в статье [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433).
-Авторы предлагают два возможных 8-битных вещественных значения:
-- E4M3: 1 бит знака, 4 — экспоненты, 3 — мантиссы
-- E5M2: 1 бит знака, 5 — экспоненты, 2 — мантиссы
+These are new 8-bit floating-point types introduced by NVidia, ARM, and Intel in the paper [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433).
+The authors propose two possible 8-bit floating-point formats:
+- E4M3: 1 sign bit, 4 exponent bits, and 3 mantissa bits.
+- E5M2: 1 sign bit, 5 exponent bits, and 2 mantissa bits.
 
-Эксперименты показывают, что современные LLM и «картиночные» сети можно успешно инферить и даже обучать на таких типах данных. Ждём широкого распространения и поддержки в железе. Существуют и более радикальные идеи 4-битных вещественных значений: E2M1 и E3M0.
+Experiments show that modern LLMs and image networks can be successfully trained and even inferred using these data types. We look forward to their broader adoption and hardware support. There are also more radical ideas for 4-bit floating-point formats, such as E2M1 and E3M0.
 
 ## [1. Where Did All the Memory Go?](https://arxiv.org/abs/1910.02054)
 
 Let’s examine the memory consumption of the current training system. For example, a 1.5B parameter GPT-2 model requires 3GB (1.5B * 16bit) of memory for its weights (or parameters) in 16-bit precision, yet, it cannot be trained on a single GPU with 32GB memory using Tensorflow or PyTorch. One may wonder where all the memory goes. During model training, most of the memory is consumed by *model states*, i.e., tensors comprising of optimizer states, gradients, and parameters. Besides these model states, the rest of the memory is consumed by activations, temporary buffers and fragmented memory which we call *residual states*. We look at the memory consumption from both in details. 
+
+![image/jpeg](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/As3IsTE-TuYbEWLHP_DoW.jpeg)
 
 ### 1.1 Model States: Optimizer States, Gradients and Parameters
 
@@ -110,24 +112,30 @@ Despite the significant reduction, the activation memory can grow quite large fo
 **Memory Fragmentation**: So far we have discussed the actual memory consumption during training. Additionally, it is possible to run out of usable memory even when there is plenty of available memory. This can happen with memory fragmentation. A request for a memory will fail if there isn’t enough contiguous memory to satisfy it, even if the total available memory is larger than requested. We observe significant memory fragmentation when training very large models, resulting in out of memory issue with over 30% of memory still available in some extreme cases.
 
 ## 2. Quantization
-Quantization is a procedure for compressing NN models by representing parameters and/or activations with a lower-bit representation such as 8-bit or 4-bit integer, instead of 32-bit or 16-bit floating point.
+Quantization in deep learning is the process of reducing the precision of the numbers used to represent a model's parameters (weights) and computations, typically from 32-bit floating-point (FP32) to lower bit-width formats like 16-bit floating-point (FP16), 8-bit integers (INT8), or even lower. The main goal of quantization is to decrease the model's size, reduce memory usage, and accelerate inference by enabling the model to run efficiently on hardware with limited computational resources.
 
-Cосредоточимся на линейной квантизации как на самом популярном и доказавшем свою эффективность методе.
+In general, it is not possible to perform pure 4bit/8bit training on quantized models. However, you can train these models by leveraging parameter efficient fine tuning methods (PEFT) and train for example adapters on top of them. We'll dive into this approach in the next section
 
-### 2.1 Несимметричная и Симметричная линейная квантизация 
-Взглянем сначала на иллюстрации:
+The simplest form of "quantization" is to convert parameters from fp32 to fp16. During training, the main weights are always stored in FP32, but in practice, the half-precision weights often provide similar quality during inference as their fp32 counterpart - a precise reference of the model is only needed when it receives multiple gradient updates. This means we can use the half-precision weights and use half the GPUs to accomplish the same outcome.
 
-**Несимметричная**:
+It'd be amazing to cut precision further, but the inference quality outcome starts to drop dramatically at lower precision. That's why we need trickier ways to do it.
+
+Quantization is done by essentially “rounding” from one data type to another. For example, if one data type has the range 0..9 and another 0..4, then the value “4” in the first data type would be rounded to “2” in the second data type. However, if we have the value “3” in the first data type, it lies between 1 and 2 of the second data type, then we would usually round to “2”. This shows that both values “4” and “3” of the first data type have the same value “2” in the second data type. This highlights that quantization is a noisy process that can lead to information loss, a sort of lossy compression.
+
+### 2.1 Asymmetric and Symmetric Linear Quantization
+Let’s start with the illustrations:
+
+**Asymmetric**:
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/E1qaUh4uRmMXMfmxPlSiu.png)
 
-**Симметричная**:
+**Symmetric**:
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/QMMum7lBhmZlPj-BCANn8.png)
 
-То есть, мы отображаем некоторый вещественный диапазон чисел в целочисленный. Сам процесс отображения можно проиллюстрировать так:
+In essence, we're mapping a continuous range of real numbers into an integer range. The process can be visualized as follows:
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/JwT-g6-J31Hce_xylvAxD.png)
 
-Где **S** и **Z** — это константы квантизации, то есть параметры, которые вычисляются в процессе. **S** - scale, отвечает за масштаб преобразования. **Z** - zero point, cответствует нулевому значению. 
+Here, **S** and **Z** are the quantization parameters, calculated during the quantization process. **S** (scale) determines the transformation's scale, and **Z** (zero point) corresponds to the zero value in the quantized domain.
 - **Несимметричная**
   - \\(S = \frac {r_{max}-r_ {min}}{q_{max}-q_{min}} \\)
   - \\(Z = \left[q_{min} - \frac{r_{min}}{S}\right]\\)
@@ -135,74 +143,74 @@ Cосредоточимся на линейной квантизации как 
   - \\(X_{dequantized} = S(X_{quantized} - Z)\\)
 
 - **Симметричная**
-  - Границы квантизируемого диапазона определяют как максимальное по модулю квантизируемое значение.
+  - The quantization range is determined by the maximum absolute value of the data.
   - \\(S = \frac{|r|_{max}}{2^{N-1} - 1} \\)
   - \\(Z = 0\\)
   - \\(X_{quantized} = \left[\frac{X}{S}\right]\\)
   - \\(X_{dequantized} = SX_{quantized}\\)
-  - Чтобы тип получился симметричным, нужно отказаться от одного значения в квантизованном типе данных. Например, диапазон signed int8: [-128, 127] превратится в [-127, 127]
+  - To maintain symmetry, one value is typically removed from the quantized data type. For example, the signed int8 range of [-128, 127] becomes [-127, 127].
 
-где \\([  ]\\) - округление.
+where \\([  ]\\) denotes rounding.
 
-Преимущества несимметричная квантизации — она умеет точнее и лучше справляться с асимметричными распределениями, в то время как симметричная квантизация выигрывает за счёт простоты и скорости. При таком подходе не нужно думать о хранении zero-point, а для деквантизации достаточно умножить тензор на константу.
+The advantage of asymmetric quantization is its ability to better handle asymmetric data distributions, whereas symmetric quantization benefits from simplicity and speed. With symmetric quantization, there's no need to store a zero-point, and dequantization is a simple multiplication by a constant.
 
-Пример:
+Example:
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/6qS8qC8WTNdZFcnV16ufS.png)
 
-Готово. На выходе мы получили 8-битный целочисленный тензор и константу квантизации 23,5. Теперь можно хранить меньший объём информации и при необходимости возвращаться к исходному 32-битному вещественному представлению с потерей точности.
+The result is an 8-bit integer tensor with a quantization constant of 23.5. This allows for reduced storage requirements and, if necessary, conversion back to the original 32-bit floating-point representation, albeit with some loss of precision.
 
-### 2.2 Что квантизовать?
+### 2.2 What to Quantize?
 
-Стандартный подход — квантизовать веса модели. Никакие дополнительные манипуляции не нужны, просто воспользуйтесь формулами.
+The standard approach is to quantize the model's weights. This requires no additional manipulations—just apply the formulas.
 
-Также можно квантизовать выходы слоёв — активации. Для этого нужно оценить, какие значения встречаются в тензорах активаций. Как это сделать? Прогоняем через обученную нейросеть данные из обучающего датасета и собираем статистику. С помощью этой информации находим константы. Такой подход называют статической квантизацией.
+You can also quantize the outputs of layers, known as activations. To do this, you need to estimate the range of values that appear in activation tensors. This is done by running data from the training dataset through the trained neural network and collecting statistics. Using this information, you determine the quantization parameters. This method is called static quantization.
 
-А при динамической квантизации активации квантизуются на inference. Этот подход может дать лучшее качество, но с ним возможны трудности: в процессе inference искать константы придётся динамически. Это делает метод более сложным и вычислительно затратным, зато константы всегда остаются актуальными.
+In dynamic quantization, activations are quantized during inference. This approach can yield better quality, but it introduces challenges: finding the quantization parameters dynamically during inference makes the method more complex and computationally expensive, though it ensures the parameters are always up-to-date.
 
-### 2.3 Когда квантизовать?
+### 2.3 When to Quantize?
 
-Готовить сеть к квантизации можно в процессе обучения, такой подход называется Quantize-Aware. Для этого в нейросеть встраивают специальные блоки и в ходе обучения эмулируют квантизованный inference.
+Preparing a network for quantization can be done during training, known as **Quantize-Aware Training**. In this approach, special blocks are embedded in the neural network, and quantized inference is simulated during training.
 
-Quantize-Aware-обучение сложное и требует больше вычислительных ресурсов, но на выходе получается модель, «приспособленная» к работе с квантизованными значениями и потенциально более точная.
+Quantize-Aware Training is complex and requires more computational resources, but it produces a model that is "adapted" to working with quantized values, potentially offering higher accuracy.
 
-В случае Post Training квантизуют уже обученную модель. Для квантизации активаций через обученную сеть дополнительно прогоняют данные из калибровочного датасета, собирают статистику по тензорам и потом квантизуют. Если квантизовать только веса, данные не нужны, так как вся информация уже есть в тензорах. Этот способ проще и быстрее, чем Quantize-Aware, но уступает ему в точности.
+In the **Post Training Quantization** method, an already trained model is quantized. For activation quantization, you pass data from a calibration dataset through the trained network, collect tensor statistics, and then quantize. If you’re only quantizing weights, no additional data is needed since all necessary information is already in the tensors. This method is simpler and faster than Quantize-Aware Training but is typically less accurate.
 
-### 2.4 Гранулярность
+### 2.4 Granularity
 
-Нейросеть можно квантизовать с разной гранулярностью. Самый плохой способ — квантизовать сразу всю сеть за раз. В этом случае у вас получится одна общая константа S на всю модель. Результат таких манипуляций, скорее всего, окажется неудовлетворительным.
+Quantization can be applied with varying levels of granularity. The most basic approach is to quantize the entire network at once, resulting in a single scale factor S for the entire model. This often leads to unsatisfactory results.
 
-Можно квантизовать тензоры по отдельности — тогда каждый тензор получит свои константы. А можно пойти дальше и в каждом тензоре квантизовать строки или столбцы. Соответственно, у каждой строки (столбца) в этом случае будет своя константа. Их придётся где-то хранить, зато вычисления будут точнее.
+A better approach is to quantize tensors individually, allowing each tensor to have its own scale factor. You can go even further and quantize rows or columns within each tensor, giving each row (or column) its own scale factor. Although this increases the storage requirements for scale factors, it significantly improves the accuracy of computations.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/xbY-NhjLaCY88RPi5PNee.png)
 
-Также можно нарезать тензор на блоки небольшого размера — так получится ещё точнее. Этот подход позволяет бороться с выбросами в матрицах, о чём мы и поговорим дальше.
+You can also divide the tensor into smaller blocks, which yields even greater accuracy. This approach helps mitigate the impact of outliers in matrices, a topic we'll explore further.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/S1SvT4tE5OEVvTskumu3c.png)
 
-Итак, чем меньше гранулярность, тем меньше констант нужно хранить, и наоборот — чем выше гранулярность, тем ближе результаты квантизованных вычислений к исходным.
+In summary, the smaller the granularity, the fewer scale factors you need to store; conversely, the higher the granularity, the closer the quantized computations are to the original.
 
-### 2.5 Типы данных
+### 2.5 Data Types
 
-В квантизованных нейросетевых моделях обычно присутствуют два типа данных:
+Quantized neural network models typically involve two types of data:
 
-- **Quantized type** — в этом типе хранят тензоры
-- **Computation type** — в этом типе проводят вычисления.
+- **Quantized type** —  the type used to store tensors.
+- **Computation type** — the type used for performing calculations.
 
-К сожалению, эти два типа не всегда совпадают. Например, ваше железо может не поддерживать операции в хитром quantized type. Эффективных кернелов перемножения матриц под квантизованный тип может просто не существовать. В таких случаях перед вычислениями матрицу нужно конвертировать в computation type. Также computation type позволяет избежать проблем с переполнением в активациях, так как перемножение 8-битных чисел наверняка приведёт к выходу за границы типа.
+Unfortunately, these two types don't always match. For example, your hardware might not support operations in a specific quantized type. Efficient matrix multiplication kernels for certain quantized types may not exist. In such cases, you’ll need to convert the matrix to a computation type before performing calculations. The computation type also helps avoid overflow issues in activations since multiplying 8-bit numbers can easily exceed the data type's limits.
 
-### 2.6 Проблема выбросов
-Посмотрим на пример симметричной квантизации
+### 2.6 The Problem of Outliers
+Consider the example of symmetric quantization:
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/AHIUqmayD-GX7PpEPirpg.png)
 
-Что получится, если во входной тензор попадёт выброс?
+What happens if an outlier is present in the input tensor?
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/M-NJYW1SuSDNU4qiHa5Dv.png)
 
-Веса «склеились» в узкий диапазон и стали неотличимы. Качество модели потеряно. Так единственный выброс испортил всю матрицу.
+The weights get "compressed" into a narrow range, becoming indistinguishable. The model's quality is compromised. In this case, a single outlier ruined the entire matrix.
 
-Когда число параметров становится больше и больше, стандартные техники квантизации перестают работать. При переходе границы в 6,7 миллиардов параметров квантизованные модели [теряют всё качество](https://arxiv.org/abs/2208.07339). Происходит это из-за растущего числа выбросов в матрицах
+As the number of parameters increases, standard quantization techniques begin to fail. When the number of parameters exceeds 6.7 billion, quantized models [lose significant quality](https://arxiv.org/abs/2208.07339). This occurs due to the increasing number of outliers in the matrices.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/juzSha_nIdR3znammiwgO.png)
 
@@ -213,34 +221,6 @@ Quantize-Aware-обучение сложное и требует больше в
 
 
 
-
-#### 1.1. Mixed Precision
-Before diving into Mixed Precision and related topics, it’s crucial to understand what contributes to memory consumption during model training. A model consists of parameters, each represented as a real number stored in the computer's memory. Typically, these real numbers are stored in the float32 format, which requires 32 bits per number.
-
-To put this in perspective, let's calculate the memory needed to load a model like Llama 70B. This model has 70 billion parameters, so it would require approximately 260.77 GB of memory (32 * 70,000,000,000 bits ≈ 260.77 GB). But that’s just the start. During training, we also need to store gradients for each parameter, which adds another 260 GB. Additionally, storing the first moment (inertia) and the second moment (adaptive learning rate) of optimizer like Adam for each parameter requires another 260 GB each.
-
-In total, just to train a model with 70 billion parameters, you’d need approximately 1040 GB of GPU memory. And this doesn’t even account for the memory needed for activations, which are related to the batch size, data size (e.g., sequence length), and model architecture. Although we won’t include activations in our future calculations to maintain generality, it's worth noting that they occupy a comparable amount of memory to the model’s weights.
-
-Having established the memory requirements for training in float32, let's explore how Mixed Precision works.
-
-The key idea behind Mixed Precision is whether we can achieve sufficient accuracy by training models in float16, thereby reducing memory consumption and computation time by half. However, we can't simply convert all computations to float16 as this would lead to [numerical instability](https://arxiv.org/abs/2010.06192v1)
-
-![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/W_iFlLm64CUEtm3MNzTKT.png)
-
-**Mixed Precision** training is a technique that enables the use of float16 without causing the model training to diverge. It involves three main strategies:
-- **Maintaining two copies of the weights matrix**: A “master copy” in float32 and a float16 copy. Gradient updates are calculated using the float16 matrix but applied to the float32 matrix, making the gradient update process safer.
-- **Selective precision**: Different operations accumulate errors at different rates. Some operations are always safe in float16, while others are reliable only in float32. Therefore, instead of running the entire neural network in float16, some parts are run in float16 and others in float32. This mixture of data types is what gives the technique its name—"mixed precision."
-- **Loss scaling**: Since float16 has a limited range, loss scaling is used to prevent underflow. However, with the advent of bfloat16 in NVIDIA GPUs starting from the Ampere series, loss scaling is no longer necessary because bfloat16 has a similar range to float32.
-
-![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/vDlps5gqM3khBs3ADMDa5.png)
-
-Now, let’s recalculate the memory requirements for training in Mixed Precision.
-
-![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/dSfhohT9rwPS6xafWunP4.png)
-
-Each parameter now requires 16 bytes, so training Llama 70B would still require approximately 1040 GB. You might wonder why the memory usage remains the same as in float32. The reason is that while we use 2 bytes (16 bits) for weights and gradients in float16, we also store a copy of the weights in float32, adding 4 bytes per parameter. But. there might be the major saving come from reduced activation memory.
-
-Also the significant advantage of Mixed Precision lies in computation speed—most calculations are now done in float16, which considerably speeds up the training process.
 
 #### 1.2. PEFT (Parameter-Efficient Fine-Tuning)
 PEFT is a family of methods designed to efficiently adapt large-scale models by training only a small subset of parameters. These methods significantly reduce computational costs and memory requirements while maintaining quality comparable to full fine-tuning.
