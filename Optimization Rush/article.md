@@ -2,7 +2,7 @@
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/m9v01CkHNjLKvt1eUHTWz.png)
 
-Training large language models (LLMs) is both computationally intensive and time-consuming. However, optimizing the training process can significantly reduce costs, accelerate development, and enhance the final model's performance. This guide provides a comprehensive overview of optimization techniques, from model selection to fine-tuning the learning process.
+Training large language models (LLMs) requires significant computational resources and time. However, by optimizing the training process, it's possible to cut costs, speed up development, and improve the model's overall performance. This guide offers a detailed exploration of various optimization strategies, covering everything from choosing the right model to refining the learning process.
 
 ## Optimization Methods
 
@@ -87,6 +87,7 @@ That is, there will only be a small change in the illustration about LoRa:
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/eJkmp305QaBin8vtzJf77.png)
 
 Let’s delve deeper into the QLoRa method:
+
 First, a bit more about quantization:
 >**Block-wise k-bit Quantization.** Quantization is the process of discretizing an input from a representation that holds more information to a representation with less information. It often means taking a data type with more bits and converting it to fewer bits, for example from 32-bit floats to 8-bit Integers. To ensure that the entire range of the low-bit data type is used, the input data type is commonly rescaled into the target data type range through normalization by the absolute maximum
 of the input elements, which are usually structured as a tensor. For example, quantizing a 32-bit Floating Point (FP32) tensor into a Int8 tensor with range [−127, 127]:
@@ -103,7 +104,7 @@ The QLoRA authors also proposed two valuable techniques:
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/qWvY2qGfbZfOGr8T_rewn.png)
 
-Now, let’s understand the entire QLoRA process (L1 and L2 in the formulas correspond to A and B in the figure):
+Now, let’s understand the entire QLoRA process (L1 and L2 in the formulas correspond to B and A in the figure):
 > **QLoRA**. Using the components described above, we define QLORA for a single linear layer in the quantized base model with a single LoRA adapter as follows:
 $$ \mathbf{Y}^{\text{BF16}} = \mathbf{X}^{\text{BF16}} \text{doubleDequant}(c_1^{\text{FP32}}, c_2^{k\text{-bit}}, \mathbf{W}^{\text{NF4}}) + \mathbf{X}^{\text{BF16}} \mathbf{L}_1^{\text{BF16}} \mathbf{L}_2^{\text{BF16}} $$
 where doubleDequant(·) is defined as:
@@ -154,3 +155,20 @@ So, what's a good compromise? Here's a solution:
 ![image/gif](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/yu3lvV-c2WhXmGBg-pW0n.gif)
 
 This method significantly reduces memory consumption, though it does come at the cost of increased training time.
+
+#### 1.5. Flash Attention
+
+Scaling the transformer architecture is heavily bottlenecked by the self-attention mechanism, which has quadratic time and memory complexity. Recent developments in accelerator hardware mainly focus on enhancing compute capacities and not memory and transferring data between hardware. This results in attention operation having a memory bottleneck.
+
+Standard attention mechanism uses High Bandwidth Memory (HBM) to store, read and write keys, queries and values. HBM is large in memory, but slow in processing, meanwhile SRAM is smaller in memory, but faster in operations. In the standard attention implementation, the cost of loading and writing keys, queries, and values from HBM is high. It loads keys, queries, and values from HBM to GPU on-chip SRAM, performs a single step of the attention mechanism, writes it back to HBM, and repeats this for every single attention step.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/g4EnH54JxS_ZFvNgtVNce.png)
+
+[**FlashAttention**](https://tridao.me/publications/flash3/flash3.pdf) is an algorithm that reorders the attention computation and leverages tiling and recomputation to significantly speed it up and reduce memory usage from quadratic to linear in sequence length. It uses tiling to load blocks of inputs from HBM (GPU memory) to SRAM (fast cache), perform attention with respect to that block, and update the output in HBM. By not writing the large intermediate attention matrices to HBM, we reduce the amount of memory reads/writes, which brings 2-4x wallclock time speedup.
+
+Diagram of FlashAttention forward pass: with tiling and softmax rescaling, we operate by blocks and avoid having to read/write from HBM, while obtaining the correct output with no approximation.
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/_Xf7ZPpoX6o-17ARq6B4E.png)
+
+For FP16:
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/-VbVssfm8mkToIrFxJgWk.png)
