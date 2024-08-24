@@ -4,9 +4,65 @@
 
 Training large language models (LLMs) requires significant computational resources and time. However, by optimizing the training process, it's possible to cut costs, speed up development, and improve the model's overall performance. This guide offers a detailed exploration of various optimization strategies, covering everything from choosing the right model to refining the learning process.
 
-## Optimization Methods
 
-### 1. Memory and Computation Optimization
+## [1 Where Did All the Memory Go?](https://arxiv.org/abs/1910.02054)
+
+Let’s examine the memory consumption of the current training system. For example, a 1.5B parameter GPT-2 model requires 3GB (1.5B * 16bit) of memory for its weights (or parameters) in 16-bit precision, yet, it cannot be trained on a single GPU with 32GB memory using Tensorflow or PyTorch. One may wonder where all the memory goes. During model training, most of the memory is consumed by *model states*, i.e., tensors comprising of optimizer states, gradients, and parameters. Besides these model states, the rest of the memory is consumed by activations, temporary buffers and fragmented memory which we call *residual states*. We look at the memory consumption from both in details. 
+
+### 1.1 Model States: Optimizer States, Gradients and Parameters
+
+Majority of the device memory is consumed by model states during training. Consider for instance, [Adam](https://arxiv.org/abs/1412.6980), one of the most popular optimizers for DL training. Adam requires storing two optimizer states, 1) the time averaged momentum and 2) variance of the gradients to compute the updates.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/qvSg5entCT4Uk4BAOGsKW.png)
+
+Therefore, to train a model with Adam, there has to be enough memory to hold a copy of both the momentum and variance of the gradients. In addition, there needs to be enough memory to store the gradients and the weights themselves. Of these three types of the parameter-related tensors, the optimizer states usually consume the most memory, specially when mixed-precision training is applied.
+
+**Mixed-Precision Training** The state-of-the-art approach to train large models on the current generation of NVIDIA GPUs is via [mixed precision training](https://arxiv.org/abs/1710.03740), where parameters and activations are stored as fp16, enabling the use of the high throughput tensor core units on these GPUs. During mixed-precision training, both the forward and backward propagation are performed using fp16 weights and activations. However, to effectively compute and apply the updates at the end of the backward propagation, the mixed-precision optimizer keeps an fp32 copy of the parameters as well as an fp32 copy of all the other otimizer states.
+
+![image/gif](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/QmMbZaLmppCKaIo0fWtHT.gif)
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/h0p-IciIv8sVY1I3l_wUL.png)
+
+Let’s take Adam as a concrete example. Mixed precision training of a model with Φ parameters using Adam requires enough memory to hold an fp16 copy of the parameters and the gradients, with memory requirements of 2Φ and 2Φ bytes respectively. In addition, it needs to hold the optimizer states: an fp32 copy of the parameters, momentum and variance, with memory requirements of 4Φ, 4Φ, and 4Φ bytes, respectively.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/zlD-T_HtyeSKEY_zhqLix.png)
+
+In total, this results 16Φ bytes of memory requirement. For a model such as GPT-2 with 1.5 Billion parameters, this leads to a memory requirement of at least 24 GB, which is significantly higher than the meager 3 GB of memory required to hold the fp16 parameters alone.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/3DuZdDRbhLK46MfVhKJJX.png)
+
+### 1.2 Residual Memory Consumption
+**Activations** can take up a significant amount of memory during training. As a concrete example, the 1.5B parameter GPT-2 model trained with sequence length of 1K and batch size of 32 requires about 60 GB of memory. 
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/iuytzmuBVVrIPUb72hj3s.png)
+
+![image/gif](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/GgNu3RrWs0ls9AX3jFUmk.gif)
+
+The activation memory of a transformer-based model is proportional to the number of *transformer layers* × *hidden dimensions* × *sequence length* × *batch size*. 
+
+[**Activation checkpointing**](https://arxiv.org/abs/1604.06174) (or gradient checkpointing) is a common approach to reduce the activation memory by approximately the square root of the total activations at the expense of 33% re-computation overhead. This would reduce the activation memory consumption of this model from 60 GB to about 8 GB. 
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/BsRo4b2J31zUFr-KMcs_n.png)
+
+![image/gif](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/ThPtDpjoHZ0GLBsRBfxAR.gif)
+
+Despite the significant reduction, the activation memory can grow quite large for bigger models even with activation checkpointing. For example, a GPT-like model with 100 billion parameters requires around 60 GB of memory for batch size 32, even when using activation checkpointing.
+
+**Temporary buffers** used for storing intermediate results consumes non-trivial amount of memory for large models. Operations such as gradient all-reduce, or gradient norm computation tend to fuse all the gradients into a single flattened buffer before applying the operation in an effort to improve throughput. For example, the bandwidth of all-reduce across devices improves with large message sizes. While the gradient themselves are usually stored as fp16 tensors, the fused buffer can be an fp32 tensor depending on the operation. When the size of the model is large, these temporary buffer sizes are non-trivial. For example, for a model with 1.5B parameters, a flattened fp32 buffer would required 6 GB of memory
+
+**Memory Fragmentation**: So far we have discussed the actual memory consumption during training. Additionally, it is possible to run out of usable memory even when there is plenty of available memory. This can happen with memory fragmentation. A request for a memory will fail if there isn’t enough contiguous memory to satisfy it, even if the total available memory is larger than requested. We observe significant memory fragmentation when training very large models, resulting in out of memory issue with over 30% of memory still available in some extreme cases.
+
+
+
+
+## Quantization
+
+
+
+
+
+
+
 #### 1.1. Mixed Precision
 Before diving into Mixed Precision and related topics, it’s crucial to understand what contributes to memory consumption during model training. A model consists of parameters, each represented as a real number stored in the computer's memory. Typically, these real numbers are stored in the float32 format, which requires 32 bits per number.
 
@@ -31,9 +87,9 @@ Now, let’s recalculate the memory requirements for training in Mixed Precision
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/dSfhohT9rwPS6xafWunP4.png)
 
-Each parameter now requires 16 bytes, so training Llama 70B would still require approximately 1040 GB. You might wonder why the memory usage remains the same as in float32. The reason is that while we use 2 bytes (16 bits) for weights and gradients in float16, we also store a copy of the weights in float32, adding 4 bytes per parameter.
+Each parameter now requires 16 bytes, so training Llama 70B would still require approximately 1040 GB. You might wonder why the memory usage remains the same as in float32. The reason is that while we use 2 bytes (16 bits) for weights and gradients in float16, we also store a copy of the weights in float32, adding 4 bytes per parameter. But. there might be the major saving come from reduced activation memory.
 
-However, the significant advantage of Mixed Precision lies in computation speed—most calculations are now done in float16, which considerably speeds up the training process.
+Also the significant advantage of Mixed Precision lies in computation speed—most calculations are now done in float16, which considerably speeds up the training process.
 
 #### 1.2. PEFT (Parameter-Efficient Fine-Tuning)
 PEFT is a family of methods designed to efficiently adapt large-scale models by training only a small subset of parameters. These methods significantly reduce computational costs and memory requirements while maintaining quality comparable to full fine-tuning.
@@ -172,3 +228,26 @@ Diagram of FlashAttention forward pass: with tiling and softmax rescaling, we op
 For FP16:
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/-VbVssfm8mkToIrFxJgWk.png)
+
+We have come a long way. Of the hard stuff, only one topic remains to be dealt with - distributed computing. Before them, let's briefly discuss a few more small methods that can slightly improve your performance
+
+#### 1.6. Gradient Accumulation
+
+**Gradient accumulation** is a technique where you can train on bigger batch sizes than your machine would normally be able to fit into memory. This is done by accumulating gradients over several batches, and only stepping the optimizer after a certain number of batches have been performed.
+
+For instance, if the gradient accumulation factor is set to 2, the process works as follows: We first calculate the gradient on one batch, which gives us a direction on the [loss function landscape](https://losslandscape.com/). Instead of updating the model weights immediately, we calculate another gradient from the next batch, obtaining a potentially different direction. By adding these two gradients together, we find a more accurate path in the loss landscape. To ensure the final update step is properly scaled, we divide the accumulated gradient by the number of batches, preventing any artificial inflation of the step size.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/UJ2nzxFp7EUquy61gDnBZ.png)
+
+This technique is particularly useful when only small batch sizes can fit into memory, which might otherwise lead to overly noisy updates and less stable training.
+
+#### 1.7. 8-bit optimizers
+
+Помните, как много оказывается потребляет памяти оптимизатор? Давайте чуть глубже поймем, почему. Сначала вспомним формулу простейшего SGD оптимизатора (x - это веса):
+$$ x_{k+1} = x_k - \alpha \nabla f(x_k) $$
+
+Как видим, здесь нам нужны только градиенты по весам. Но такой оптимизатор 
+
+$$ v_{k+1} = \beta_1 v_k + (1 - \beta_1) \nabla f(x_k) $$
+$$ G_{k+1} = \beta_2 G_k + (1 - \beta_2) (\nabla f(x_k))^2 $$
+$$ x_{k+1} = x_k - \frac{\alpha}{\sqrt{G_{k+1} + \varepsilon}} v_{k+1} $$
