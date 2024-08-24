@@ -210,24 +210,45 @@ What happens if an outlier is present in the input tensor?
 
 The weights get "compressed" into a narrow range, becoming indistinguishable. The model's quality is compromised. In this case, a single outlier ruined the entire matrix.
 
-As the number of parameters increases, standard quantization techniques begin to fail. When the number of parameters exceeds 6.7 billion, quantized models [lose significant quality](https://arxiv.org/abs/2208.07339). This occurs due to the increasing number of outliers in the matrices.
+As the number of parameters increases, standard quantization techniques, which we discussed above, begin to fail. When the number of parameters exceeds 6.7 billion, quantized models [lose significant quality](https://arxiv.org/abs/2208.07339). This occurs due to the increasing number of outliers in the matrices.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/juzSha_nIdR3znammiwgO.png)
 
+### 2.7 LLM.int8()
 
+The authors of the [paper](https://arxiv.org/abs/2208.07339) introduced a method to quantize large models (up to 175 billion parameters) from the usual 16- or 32-bit floating-point weights to 8-bit integers with minimal loss in quality. The key idea is to handle outliers separately, as they constitute a very small portion of the data (0.1–1% of all values) and are concentrated in specific channels of the activation tensors.
 
+Let's consider the multiplication of the activation matrix **𝑋** by the weight matrix **𝑊**. The columns of **𝑋** are divided into two groups: those containing at least one outlier and those without any. This division results in two new weight matrices derived from the original **𝑊**.
 
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/bHQ1P230U88BMC6cUh_yK.png)
 
+It's important to note that the i-th column of activations **𝑋** interacts only with the i-th row of weights **𝑊**. Hence, the matrix **𝑊** can also be split into two parts by separating the rows corresponding to the outlier columns of **𝑋**.
 
+As a result, we obtain two groups of matrices: one with outliers and one without. Each group is then multiplied separately, and the results are summed. This sum is equivalent to the usual matrix multiplication.
 
+Most of the values will fall into matrices without outliers, which can be easily quantized to 8 bits, allowing for efficient operations. The matrices containing outliers are left in their original 16-bit type to ensure computations remain accurate.
 
+However, the increased quantization accuracy comes at the cost of reduced performance due to the overhead of additional computations. The authors' benchmarks show a 15–23% decrease in inference speed on BLOOM-176B compared to the 16-bit default. 
 
-#### 1.2. PEFT (Parameter-Efficient Fine-Tuning)
-PEFT is a family of methods designed to efficiently adapt large-scale models by training only a small subset of parameters. These methods significantly reduce computational costs and memory requirements while maintaining quality comparable to full fine-tuning.
+### 2.8 GPTQ
 
+Quantization is rapidly evolving, with increasingly [new and efficient approaches](https://huggingface.co/docs/transformers/quantization/overview) emerging. We won’t delve further into this topic but will briefly explore one more alternative approach.
+
+Let's reconsider the problem: Is rounding to the nearest integer the optimal solution? Perhaps not. Our actual goal is to find a quantized weight matrix \\(\hat{W}\\) that, when multiplied by the activation matrix, produces a result as close as possible to the original:
+$$ \min_{\hat{W}} \|XW - X\hat{W}\|_2^2 $$
+
+This involves a lot of mathematics and engineering solutions, but the idea should be clear. For more details, you can refer to the [original paper](https://arxiv.org/abs/2210.17323)
+
+It's important to note that everything discussed so far has focused solely on using quantized models for inference optimization. But what about training?
+
+## 3. PEFT (Parameter-Efficient Fine-Tuning), LoRA and QLoRa
+
+[PEFT](https://huggingface.co/docs/peft/index) is a family of methods designed to efficiently adapt large-scale models by training only a small subset of parameters. These methods significantly reduce computational costs and memory requirements while maintaining quality comparable to full fine-tuning.
+
+### 3.1 LoRA: Low-Rank Adaptation
 One of the most popular and effective PEFT methods is [LoRa](https://arxiv.org/abs/2106.09685).
 
-![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/Q0d07jIXg43H4IAEgAJJN.png)
+![image/gif](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/zqXpRb2muYPpSGKuYc6IK.gif)
 
 To understand the illustration, let's delve into the fundamental observation that makes this method effective:
 >A neural network contains many dense layers which perform matrix multiplication. The weight
@@ -246,7 +267,7 @@ $$ h = W_0x + \Delta W x = W_0x + BAx $$
 
 In essence, we freeze the original model, insert low-rank adapters under the relevant weight matrices, and train these adapters to simulate the updates that would normally come from gradients. With these concepts and the formulas above, you should now understand the illustration provided.
 
-Where do the memory and computation optimizations come from? Since the baseline model is frozen, we don’t store gradients or optimizer moments for it, and we avoid unnecessary computations. Essentially, with a few caveats, we now only need to perform inference on the baseline model, which, in the case of large models, still requires significant hardware resources. However, the trainable parameters in these adapters typically constitute less than 1% of the total parameters of the original model.
+>The most significant benefit comes from the reduction in memory and storage usage. For a large Transformer trained with Adam, we reduce that VRAM usage by up to 2/3 if \\(r \ll d\\) as we do not need to store the gradients and optimizer states for the frozen parameters. We also observe a 25% speedup during training on GPT-3 175B compared to full fine-tuning as we do not need to calculate the gradient for the vast majority of the parameters.
 
 #### 1.3. Quantization и QLoRa
 
