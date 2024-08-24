@@ -4,8 +4,65 @@
 
 Training large language models (LLMs) requires significant computational resources and time. However, by optimizing the training process, it's possible to cut costs, speed up development, and improve the model's overall performance. This guide offers a detailed exploration of various optimization strategies, covering everything from choosing the right model to refining the learning process.
 
+## 0. Небольшое введение в типы данных
+Давайте для начала вкратце разберем, как числа представляются в компьютере и какие разновидности данного представления существуют. Нам это очень сильно понадобится в дальнейшем для понимания потребления памяти во время обучения моделей.
 
-## [1 Where Did All the Memory Go?](https://arxiv.org/abs/1910.02054)
+### Int16/Int8/Int4
+Самые обыкновенные целочисленные типы. Диапазон значений - \\([-2^{n-1}, 2^{n-1} - 1]\\)
+
+Схематично битовое представление Int16 можно показать так: 1 бит знака и 15 бит на значение.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/WY7E6uMR73aigsfcsCq8H.png)
+
+Чем больше битов, тем точнее можно представить диапазон значений.
+
+### Float32
+Здесь битовое представление выглядит так: 1 бит знака, 8 — экспоненты, 23 — мантиссы.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/KSS-oRLsPUnQ9Vypo7UZp.png)
+
+Формула:
+$$ v = (-1)^{\text{sign}} \cdot 2^{E-127} \cdot \left(1 + \sum_{i=1}^{23} b_{23-i}2^{-i}\right) $$
+
+Ключевая идея вещественных типов: чем больше битов выделено под экспоненту, тем больший диапазон значений можно представить. Биты, оставшиеся для мантиссы, отвечают за точность, с которой представлены значения в диапазоне.
+
+### Float16
+Битовое представление: 1 бит знака, 5 — экспоненты и 10 — мантиссы.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/bX17lqakEY903HrSCZF-c.png)
+
+Главная проблема float16 — маленький диапазон значений. Максимальное значение равно 65504, из-за чего тензоры активаций легко переполняются.
+
+### Bfloat16, или brain float
+Специальный формат данных, разработанный Google Brain. Можно рассматривать как аппроксимацию float32. Битовое представление такое: 1 бит знака, 8 — экспоненты и 7 — мантиссы.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/jeGGZP2DxQfXZZuB72iRD.png)
+
+Обратите внимание, что число битов под экспоненту совпадает с представлением float32. Значит, bfloat16 представляет тот же диапазон значений, пусть и менее точно. Зато можно меньше опасаться переполнений в активациях.
+
+Другая приятная особенность bf16 — возможность быстро конвертировать значения во float32. Магия работает благодаря сходному битовому представлению. К сожалению, пока что не всё железо работает с этим типом (особенно мобильное).
+
+### TensorFloat32
+
+Интересный 19-битный [тип данных](https://blogs.nvidia.com/blog/tensorfloat-32-precision-format/) от NVidia. Поддерживается в архитектурах, начиная с NVidia Ampere (A-100). Битовое представление: 1 бит знака, 8 — экспоненты, 10 — мантиссы.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/ha7W9jLH-O1BvMrG5cAQf.png)
+
+Ключевые особенности:
+- число битов экспоненты совпадает с bfloat16, а значит и с float32;
+- число битов мантиссы совпадает с float16.
+
+Получился необычный, но точный и эффективный тип данных. Показывает отличные результаты по производительности вычислений и подходит для обучения моделей. Но существует только на современных видеокартах NVidia.
+
+### E4M3 и E5M2
+Новые 8-битные float. Предложены NVidia, ARM и Intel в статье [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433).
+Авторы предлагают два возможных 8-битных вещественных значения:
+- E4M3: 1 бит знака, 4 — экспоненты, 3 — мантиссы
+- E5M2: 1 бит знака, 5 — экспоненты, 2 — мантиссы
+
+Эксперименты показывают, что современные LLM и «картиночные» сети можно успешно инферить и даже обучать на таких типах данных. Ждём широкого распространения и поддержки в железе. Существуют и более радикальные идеи 4-битных вещественных значений: E2M1 и E3M0.
+
+## [1. Where Did All the Memory Go?](https://arxiv.org/abs/1910.02054)
 
 Let’s examine the memory consumption of the current training system. For example, a 1.5B parameter GPT-2 model requires 3GB (1.5B * 16bit) of memory for its weights (or parameters) in 16-bit precision, yet, it cannot be trained on a single GPU with 32GB memory using Tensorflow or PyTorch. One may wonder where all the memory goes. During model training, most of the memory is consumed by *model states*, i.e., tensors comprising of optimizer states, gradients, and parameters. Besides these model states, the rest of the memory is consumed by activations, temporary buffers and fragmented memory which we call *residual states*. We look at the memory consumption from both in details. 
 
@@ -52,10 +109,104 @@ Despite the significant reduction, the activation memory can grow quite large fo
 
 **Memory Fragmentation**: So far we have discussed the actual memory consumption during training. Additionally, it is possible to run out of usable memory even when there is plenty of available memory. This can happen with memory fragmentation. A request for a memory will fail if there isn’t enough contiguous memory to satisfy it, even if the total available memory is larger than requested. We observe significant memory fragmentation when training very large models, resulting in out of memory issue with over 30% of memory still available in some extreme cases.
 
+## 2. Quantization
+Quantization is a procedure for compressing NN models by representing parameters and/or activations with a lower-bit representation such as 8-bit or 4-bit integer, instead of 32-bit or 16-bit floating point.
+
+Cосредоточимся на линейной квантизации как на самом популярном и доказавшем свою эффективность методе.
+
+### 2.1 Несимметричная и Симметричная линейная квантизация 
+Взглянем сначала на иллюстрации:
+
+**Несимметричная**:
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/E1qaUh4uRmMXMfmxPlSiu.png)
+
+**Симметричная**:
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/QMMum7lBhmZlPj-BCANn8.png)
+
+То есть, мы отображаем некоторый вещественный диапазон чисел в целочисленный. Сам процесс отображения можно проиллюстрировать так:
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/JwT-g6-J31Hce_xylvAxD.png)
+
+Где **S** и **Z** — это константы квантизации, то есть параметры, которые вычисляются в процессе. **S** - scale, отвечает за масштаб преобразования. **Z** - zero point, cответствует нулевому значению. 
+- **Несимметричная**
+  - \\(S = \frac {r_{max}-r_ {min}}{q_{max}-q_{min}} \\)
+  - \\(Z = \left[q_{min} - \frac{r_{min}}{S}\right]\\)
+  - \\(X_{quantized} = \left[\frac{X}{S} + Z\right]\\)
+  - \\(X_{dequantized} = S(X_{quantized} - Z)\\)
+
+- **Симметричная**
+  - Границы квантизируемого диапазона определяют как максимальное по модулю квантизируемое значение.
+  - \\(S = \frac{|r|_{max}}{2^{N-1} - 1} \\)
+  - \\(Z = 0\\)
+  - \\(X_{quantized} = \left[\frac{X}{S}\right]\\)
+  - \\(X_{dequantized} = SX_{quantized}\\)
+  - Чтобы тип получился симметричным, нужно отказаться от одного значения в квантизованном типе данных. Например, диапазон signed int8: [-128, 127] превратится в [-127, 127]
+
+где \\([  ]\\) - округление.
+
+Преимущества несимметричная квантизации — она умеет точнее и лучше справляться с асимметричными распределениями, в то время как симметричная квантизация выигрывает за счёт простоты и скорости. При таком подходе не нужно думать о хранении zero-point, а для деквантизации достаточно умножить тензор на константу.
+
+Пример:
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/6qS8qC8WTNdZFcnV16ufS.png)
+
+Готово. На выходе мы получили 8-битный целочисленный тензор и константу квантизации 23,5. Теперь можно хранить меньший объём информации и при необходимости возвращаться к исходному 32-битному вещественному представлению с потерей точности.
+
+### 2.2 Что квантизовать?
+
+Стандартный подход — квантизовать веса модели. Никакие дополнительные манипуляции не нужны, просто воспользуйтесь формулами.
+
+Также можно квантизовать выходы слоёв — активации. Для этого нужно оценить, какие значения встречаются в тензорах активаций. Как это сделать? Прогоняем через обученную нейросеть данные из обучающего датасета и собираем статистику. С помощью этой информации находим константы. Такой подход называют статической квантизацией.
+
+А при динамической квантизации активации квантизуются на inference. Этот подход может дать лучшее качество, но с ним возможны трудности: в процессе inference искать константы придётся динамически. Это делает метод более сложным и вычислительно затратным, зато константы всегда остаются актуальными.
+
+### 2.3 Когда квантизовать?
+
+Готовить сеть к квантизации можно в процессе обучения, такой подход называется Quantize-Aware. Для этого в нейросеть встраивают специальные блоки и в ходе обучения эмулируют квантизованный inference.
+
+Quantize-Aware-обучение сложное и требует больше вычислительных ресурсов, но на выходе получается модель, «приспособленная» к работе с квантизованными значениями и потенциально более точная.
+
+В случае Post Training квантизуют уже обученную модель. Для квантизации активаций через обученную сеть дополнительно прогоняют данные из калибровочного датасета, собирают статистику по тензорам и потом квантизуют. Если квантизовать только веса, данные не нужны, так как вся информация уже есть в тензорах. Этот способ проще и быстрее, чем Quantize-Aware, но уступает ему в точности.
+
+### 2.4 Гранулярность
+
+Нейросеть можно квантизовать с разной гранулярностью. Самый плохой способ — квантизовать сразу всю сеть за раз. В этом случае у вас получится одна общая константа S на всю модель. Результат таких манипуляций, скорее всего, окажется неудовлетворительным.
+
+Можно квантизовать тензоры по отдельности — тогда каждый тензор получит свои константы. А можно пойти дальше и в каждом тензоре квантизовать строки или столбцы. Соответственно, у каждой строки (столбца) в этом случае будет своя константа. Их придётся где-то хранить, зато вычисления будут точнее.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/xbY-NhjLaCY88RPi5PNee.png)
+
+Также можно нарезать тензор на блоки небольшого размера — так получится ещё точнее. Этот подход позволяет бороться с выбросами в матрицах, о чём мы и поговорим дальше.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/S1SvT4tE5OEVvTskumu3c.png)
+
+Итак, чем меньше гранулярность, тем меньше констант нужно хранить, и наоборот — чем выше гранулярность, тем ближе результаты квантизованных вычислений к исходным.
+
+### 2.5 Типы данных
+
+В квантизованных нейросетевых моделях обычно присутствуют два типа данных:
+
+- **Quantized type** — в этом типе хранят тензоры
+- **Computation type** — в этом типе проводят вычисления.
+
+К сожалению, эти два типа не всегда совпадают. Например, ваше железо может не поддерживать операции в хитром quantized type. Эффективных кернелов перемножения матриц под квантизованный тип может просто не существовать. В таких случаях перед вычислениями матрицу нужно конвертировать в computation type. Также computation type позволяет избежать проблем с переполнением в активациях, так как перемножение 8-битных чисел наверняка приведёт к выходу за границы типа.
+
+### 2.6 Проблема выбросов
+Посмотрим на пример симметричной квантизации
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/AHIUqmayD-GX7PpEPirpg.png)
+
+Что получится, если во входной тензор попадёт выброс?
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/M-NJYW1SuSDNU4qiHa5Dv.png)
+
+Веса «склеились» в узкий диапазон и стали неотличимы. Качество модели потеряно. Так единственный выброс испортил всю матрицу.
+
+Когда число параметров становится больше и больше, стандартные техники квантизации перестают работать. При переходе границы в 6,7 миллиардов параметров квантизованные модели [теряют всё качество](https://arxiv.org/abs/2208.07339). Происходит это из-за растущего числа выбросов в матрицах
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/juzSha_nIdR3znammiwgO.png)
 
 
-
-## Quantization
 
 
 
