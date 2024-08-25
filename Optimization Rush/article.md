@@ -518,31 +518,33 @@ Parallelizing the multi-headed attention layers is even simpler, since they are 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/nqdbDwvP_kVt3_wQloYzX.png)
 
 ### 6.4 FSDP - Fully Sharded Data Parallel
-In DataParallel training, each process/ worker owns a replica of the model and processes a batch of data, finally it uses all-reduce to sum up gradients over different workers. In DP the model weights and optimizer states are replicated across all workers. [FSDP](https://arxiv.org/abs/2304.11277) is a type of data parallelism that shards model parameters, optimizer states and gradients across DP ranks.
-
-![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/CC79O1a0bWmQ7qNBxBvjv.png)
-
-Usually, model layers are wrapped with FSDP in a nested way, so that only layers in a single FSDP instance need to gather the full parameters to a single device during forward or backward computations. The gathered full parameters will be freed immediately after computation, and the freed memory can be used for the next layer’s computation. In this way, peak GPU memory could be saved and thus training can be scaled to use a larger model size or larger batch size. To further maximize memory efficiency, FSDP can offload the parameters, gradients and optimizer states to CPUs when the instance is not active in the computation.
+[FSDP](https://arxiv.org/abs/2304.11277) expands upon distributed data parallel, by parallelizing not just data, but the model parameters, the optimizer states and gradients associated with the model. Specifically - each GPU only stores a subset of the entire model and the associated subset of optimizer states and gradients.
 
 #### 6.4.1 FSDP Units
+FSDP breaks down a model instance into smaller units and then flattens and shards all of the parameters within each unit. The sharded parameters are communicated and recovered on-demand before computations, and then they are immediately discarded afterwards. This approach ensures that FSDP only needs to materialize parameters from one unit at a time, which significantly reduces peak memory consumption
 
-#### 6.4.2 Sharding Strategy
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/it8QPgBc3GVuR6mu9aTkW.png)
 
-#### 6.4.3 FSDP Workflow
-**In constructor**:
-- Shard model parameters and each rank only keeps its own shard
+#### 6.4.2 FSDP Workflow
+Let us consider FSDP **unit1** that contains **[layer1,layer2]** to explain this process.
 
 **Forward pass**:
-1. Run all_gather to collect all shards from all ranks to recover the full parameter in this FSDP unit
-2. Run forward computation
-3. Discard parameter shards it has just collected
+1. Before forward computation enters **layer1**, FSDP collects the unsharded parameters for **layer1** and **layer2** by gathering shards from other peer ranks.
+2. With the unsharded parameters, FSDP runs the local computation of those layers
+3. Then frees the peer shards it just collected to reduce memory footprint
+
+Therefore, during the entire forward pass, FSDP only needs to fully materialize one unit at a time, while all other units can stay sharded.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/7zvopsLHueGXc0FmKGi28.png)
 
 **Backward pass**:
-1. Run all_gather to collect all shards from all ranks to recover the full parameter in this FSDP unit
-2. Run backward computation
-3. Run reduce_scatter to sync gradients
-4. Discard parameters.
+1. Similarly, during the backward computation, FSDP **unit1** recovers the unsharded parameters for **layer1** and **layer2** before backward reaches **layer2**
+2. When the autograd engine finishes the backward computation of these two layers, FSDP frees the peer shards and launches ReduceScatter to reduce and shard gradients.
+3. Hence, after backward computation, each rank only keeps a shard of both parameters and gradients
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/IAfgPwAKNXVG5Y84ReqAl.png)
+
+The whole workflow can be visualized as follows:
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/CC79O1a0bWmQ7qNBxBvjv.png)
+
