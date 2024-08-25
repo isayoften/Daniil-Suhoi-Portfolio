@@ -2,7 +2,7 @@
 
 ![image/gif](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/0aIWkNFWweaSYFP1oAnZD.gif)
 
-Training large language models (LLMs) requires significant computational resources and time. However, by optimizing the training process, it's possible to cut costs, speed up development, and improve the model's overall performance. This guide offers a detailed exploration of various optimization strategies, covering everything from basics of memory consumption to refining the training process.
+Training large language models (LLMs) requires significant computational resources and time. However, by optimizing the training process, it's possible to cut costs, speed up development, and improve the model's overall performance. This guide offers a comprehensive exploration of various optimization strategies, covering everything from basics of memory consumption to refining the training process and distributed training.
 
 *I want to note that this article is basically a combination of the most relevant excerpts from various articles, thanks to which I was able to achieve the highest quality and reliability in the presentation of the material.*
 
@@ -416,19 +416,70 @@ These attention variants offer:
 - **Reduced computational load**: Both methods decrease computation, beneficial for large models.
 - **Increased processing speed**: Simplifying attention leads to faster training and inference.
 
-## 4. Distributed Training
+## 5. Collective Operations
+Before diving into distributed training, it’s beneficial to first understand the basic operations involved in multi-GPU and multi-node communication.
 
+For this purpose, we'll focus on the [NVIDIA NCCL](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/overview.html)
+
+The NVIDIA Collective Communication Library (NCCL) implements multi-GPU and multi-node communication primitives optimized for NVIDIA GPUs and Networking. NCCL provides routines such as all-gather, all-reduce, broadcast, reduce, reduce-scatter as well as point-to-point send and receive that are optimized to achieve high bandwidth and low latency over PCIe and NVLink high-speed interconnects within a node and over NVIDIA Mellanox Network across nodes.
+
+Leading deep learning frameworks such as Caffe2, Chainer, MxNet, PyTorch and TensorFlow have integrated NCCL to accelerate deep learning training on multi-GPU multi-node systems.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/7FXIGEEFaWJaLN_Ttydn0.png)
+
+Collective operations have to be called for each rank (hence CUDA device) to form a complete collective operation. Failure to do so will result in other ranks waiting indefinitely.
+
+### 5.1 AllReduce
+The AllReduce operation performs reductions on data (for example, sum, min, max) across devices and stores the result in the receive buffer of every rank.
+
+In a sum allreduce operation between k ranks, each rank will provide an array in of N values, and receive identical results in array out of N values, where out[i] = in0[i]+in1[i]+…+in(k-1)[i].
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/fEKFr4jK-NCawJmD4ZbPq.png)
+
+### 5.2 Broadcast
+The Broadcast operation copies an N-element buffer from the root rank to all the ranks.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/PSZn_fdIu5oAiQhx2us4X.png)
+
+Important note: The root argument is one of the ranks, not a device number, and is therefore impacted by a different rank to device mapping.
+
+### 5.3 Reduce
+The Reduce operation performs the same operation as AllReduce, but stores the result only in the receive buffer of a specified root rank.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/tXisKmL7_Q9MqEjJA2twc.png)
+
+Important note: The root argument is one of the ranks (not a device number), and is therefore impacted by a different rank to device mapping.
+
+Note: A Reduce, followed by a Broadcast, is equivalent to the AllReduce operation.
+
+### 5.4 ReduceScatter
+The ReduceScatter operation performs the same operation as Reduce, except that the result is scattered in equal-sized blocks between ranks, each rank getting a chunk of data based on its rank index.
+
+The ReduceScatter operation is impacted by a different rank to device mapping since the ranks determine the data layout.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/Z6wffjJ3IPcpyyfpyzcHD.png)
+
+### 5.5 AllGather
+The AllGather operation gathers N values from k ranks into an output buffer of size k*N, and distributes that result to all ranks.
+
+The output is ordered by the rank index. The AllGather operation is therefore impacted by a different rank to device mapping.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/fvBzt8G7NsjKQTDvJanDK.png)
+
+Note: Executing ReduceScatter, followed by AllGather, is equivalent to the AllReduce operation.
+
+## 6. Distributed Training
 Principally, there are two approaches to parallelism — data parallelism and model parallelism.
 
-### 4.1 DP - Data Parallelism
+### 6.1 DP - Data Parallelism
 Parallelization is a key strategy on training large models at scale. For a model that fits in the device memory for training, data parallelism (DP) is used to scale training to multiple devices. In DP, model parameters are replicated on each device. At each step, a mini-batch is divided evenly across all the data parallel processes, such that each process executes the forward and backward propagation on a different subset of data samples, and uses averaged gradients across processes to update the model locally.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/uZ60Sbc6Q7ZrvzQSIR1xX.png)
 
-### 4.2 Model Parallelism, Tensor Parallelism, Pipeline Parallelism
+### 6.2 Model Parallelism, Tensor Parallelism, Pipeline Parallelism
 When a model does not fit in the device memory, model parallelism split the model among processes, in vertical or horizontal way.
 
-#### 4.2.1 Naive Model Parallelism 
+#### 6.2.1 Naive Model Parallelism 
 This approach involves distributing groups of model layers across multiple GPUs by assigning specific layers to specific GPUs. As data flows through these layers, it is moved to the same GPU as the layer, while the other layers remain untouched.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/MrYIdXnXDTQNGbL3_8DMC.png)
@@ -437,14 +488,14 @@ In this example, when data moves through layers within one GPU, it’s no differ
 
 The main problem with Naive Model Parallelism is that **аll but one GPU are idle at any given moment**, which is very inefficient.
 
-#### 4.2.2 Pipeline Parallelism 
+#### 6.2.2 Pipeline Parallelism 
 PP is almost identical to a naive MP, but it solves the GPU idling problem by chunking the incoming batch into micro-batches and artificially creating a pipeline, which allows different GPUs to concurrently participate in the computation process.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/8B1qNEhiSN8EcAb_jgxlo.png)
 
 But this comes at the expense of a great deal of technical complication.
 
-#### 4.2.3 Tensor Parallelism 
+#### 6.2.3 Tensor Parallelism 
 In Tensor Parallelism, each GPU processes a slice of a tensor and only aggregates the full tensor for operations requiring it. So, unlike Model Parallelism (MP), we don't have to wait for the previous GPUs to finish processing the previous layers of the model. This allows for more efficient processing and reduced idle time.
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/T3qIAk8Dba9gM_zZyOV0W.png)
@@ -456,7 +507,7 @@ If we look at the computation in matrix form, you can see how the matrix multipl
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/oOGpgNvibHgLg7ST7jyH1.png)
 
 If we split the weight matrix **A** column-wise across **N** GPUs and perform matrix multiplications **XA_1** through **XA_n** in parallel, then we will end up with **N** output vectors **Y_1, Y_2, ..., Y_n** which can be fed into **GeLU** independently:
-$$ $ Y_ {1} $ , $ Y_ {2} $ ]=[GeLU( $ XA_ {1} $ ),GeLU( $ XA_ {2} $ )$$
+$$ [Y_1, Y_2] = [\text{GeLU}(XA_1), \text{GeLU}(XA_2)] $$
 
 Using this principle, we can update a multi-layer perceptron of arbitrary depth, without the need for any synchronization between GPUs until the very end, where we need to reconstruct the output vector from shards. The Megatron-LM paper authors provide a helpful illustration for that:
 
@@ -466,6 +517,32 @@ Parallelizing the multi-headed attention layers is even simpler, since they are 
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/nqdbDwvP_kVt3_wQloYzX.png)
 
-### 4.3 FSDP - Fully Sharded Data Parallel
+### 6.4 FSDP - Fully Sharded Data Parallel
+In DataParallel training, each process/ worker owns a replica of the model and processes a batch of data, finally it uses all-reduce to sum up gradients over different workers. In DP the model weights and optimizer states are replicated across all workers. [FSDP](https://arxiv.org/abs/2304.11277) is a type of data parallelism that shards model parameters, optimizer states and gradients across DP ranks.
 
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/CC79O1a0bWmQ7qNBxBvjv.png)
 
+Usually, model layers are wrapped with FSDP in a nested way, so that only layers in a single FSDP instance need to gather the full parameters to a single device during forward or backward computations. The gathered full parameters will be freed immediately after computation, and the freed memory can be used for the next layer’s computation. In this way, peak GPU memory could be saved and thus training can be scaled to use a larger model size or larger batch size. To further maximize memory efficiency, FSDP can offload the parameters, gradients and optimizer states to CPUs when the instance is not active in the computation.
+
+#### 6.4.1 FSDP Units
+
+#### 6.4.2 Sharding Strategy
+
+#### 6.4.3 FSDP Workflow
+**In constructor**:
+- Shard model parameters and each rank only keeps its own shard
+
+**Forward pass**:
+1. Run all_gather to collect all shards from all ranks to recover the full parameter in this FSDP unit
+2. Run forward computation
+3. Discard parameter shards it has just collected
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/7zvopsLHueGXc0FmKGi28.png)
+
+**Backward pass**:
+1. Run all_gather to collect all shards from all ranks to recover the full parameter in this FSDP unit
+2. Run backward computation
+3. Run reduce_scatter to sync gradients
+4. Discard parameters.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/IAfgPwAKNXVG5Y84ReqAl.png)
