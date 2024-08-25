@@ -1,8 +1,10 @@
 # Optimizing LLM Training: An Overview of Techniques 👐 📚
 
-![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/m9v01CkHNjLKvt1eUHTWz.png)
+![image/gif](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/0aIWkNFWweaSYFP1oAnZD.gif)
 
 Training large language models (LLMs) requires significant computational resources and time. However, by optimizing the training process, it's possible to cut costs, speed up development, and improve the model's overall performance. This guide offers a detailed exploration of various optimization strategies, covering everything from basics of memory consumption to refining the training process.
+
+*I want to note that this article is basically a combination of the most relevant excerpts from various articles, thanks to which I was able to achieve the highest quality and reliability in the presentation of the material.*
 
 ## 0. Introduction to Data Types
 Before diving into the intricacies of model training, let's briefly explore how numbers are represented in a computer and the different types of data representations available. This foundational knowledge is crucial for understanding memory consumption during model training.
@@ -311,7 +313,9 @@ We use NF4 for \\(\mathbf{W}\\) and FP8 for \\(c_2\\). We use a blocksize of 64 
 
 QLORA reduces the average memory requirements of finetuning a 65B parameter model from >780GB of GPU memory to <48GB without degrading the runtime or predictive performance compared to a 16-bit fully finetuned baseline. This marks a significant shift in accessibility of LLM finetuning: now the largest publicly available models to date finetunable on a single GPU.
 
-#### 1.5. Flash Attention
+## 4. Additional techniques
+
+### 4.1 Flash Attention
 
 Scaling the transformer architecture is heavily bottlenecked by the self-attention mechanism, which has quadratic time and memory complexity. Recent developments in accelerator hardware mainly focus on enhancing compute capacities and not memory and transferring data between hardware. This results in attention operation having a memory bottleneck.
 
@@ -328,9 +332,7 @@ For FP16:
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/-VbVssfm8mkToIrFxJgWk.png)
 
-We have come a long way. Of the hard stuff, only one topic remains to be dealt with - distributed computing. Before them, let's briefly discuss a few more small methods that can slightly improve your performance
-
-#### 1.6. Gradient Accumulation
+### 4.2. Gradient Accumulation
 
 **Gradient accumulation** is a technique where you can train on bigger batch sizes than your machine would normally be able to fit into memory. This is done by accumulating gradients over several batches, and only stepping the optimizer after a certain number of batches have been performed.
 
@@ -340,13 +342,130 @@ For instance, if the gradient accumulation factor is set to 2, the process works
 
 This technique is particularly useful when only small batch sizes can fit into memory, which might otherwise lead to overly noisy updates and less stable training.
 
-#### 1.7. 8-bit optimizers
+### 4.3 8-bit optimizers
 
-Помните, как много оказывается потребляет памяти оптимизатор? Давайте чуть глубже поймем, почему. Сначала вспомним формулу простейшего SGD оптимизатора (x - это веса):
-$$ x_{k+1} = x_k - \alpha \nabla f(x_k) $$
+Stateful optimizers maintain gradient statistics over time, for example, the exponentially smoothed sum (SGD with momentum) or squared sum (Adam) of past gradient values.
 
-Как видим, здесь нам нужны только градиенты по весам. Но такой оптимизатор 
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/ugAlqFWuFGi3tlLLY7nMq.png)
 
-$$ v_{k+1} = \beta_1 v_k + (1 - \beta_1) \nabla f(x_k) $$
-$$ G_{k+1} = \beta_2 G_k + (1 - \beta_2) (\nabla f(x_k))^2 $$
-$$ x_{k+1} = x_k - \frac{\alpha}{\sqrt{G_{k+1} + \varepsilon}} v_{k+1} $$
+This state can be used to accelerate optimization compared to plain stochastic gradient descent, but uses memory that might otherwise be allocated to model parameters. As a result, this limits the maximum size of models that can be trained in practice. Now take a look at the biggest models that can be trained with [8-bit optimizers](https://arxiv.org/abs/2110.02861).
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/jbP32Szbir8_Wmj2zqZVU.png)
+
+The idea, as you might have guessed, is to quantize the optimizer states to 8-bit.
+
+To overcome the resulting computational, quantization and stability challenges, 8-bit optimizers have three components:
+1. **Block-wise quantization**: divides input tensors into smaller blocks that are independently quantized, isolating outliers and distributing the error more equally over all bits. Each block is processed in parallel across cores, yielding faster optimization and high precision quantization.
+2. **Dynamic quantization**: quantizes both small and large values with high precision.
+3. **Stable embedding layer**: improves stability during optimization for models with word embeddings.
+
+With these components, performing an optimizer update with 8-bit states is straightforward. The 8-bit optimizer states are dequantized to 32-bit before you perform the update, and then the states are quantized back to 8-bit for storage.
+
+The 8-bit to 32-bit conversion happens element-by-element in registers, meaning no slow copies to GPU memory or additional temporary memory are needed to perform quantization and dequantization. For GPUs, this makes 8-bit optimizers much faster than regular 32-bit optimizers.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/GQaxPFty1nO2JDZmuWeAz.png)
+
+### 4.4 Sequence Packing
+
+When finetuning a large language model with either full-parameter or parameter-efficient finetuning, GPU underutilization is a common problem due to an inefficient data pipeline. This is because most finetuning datasets have a skewed distribution of sequence lengths, with many short sequences and a few long sequences, following Zipf’s Law.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/tqWfrWvdY1B_zOJgJGAgI.png)
+
+Transformer models can only take in fixed length inputs, so the input has to be padded with many unused pad tokens, which is inefficient in two ways:
+- Computation performed on the pad values is eventually ignored for model output, resulting in wasted FLOPs.
+- Micro batch size is often limited by the batch which contains longer sequences, so that most other micro batches have underutilized GPU memory.
+
+**Sequence packing** is a training technique where multiple training sequences (examples) are concatenated together into one long sequence (pack). This eliminates the need for padding and allows more tokens to be processed in each micro batch, maximizing both GPU compute and GPU memory.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/2ZH5pNV9cQ7UfAb0FIGxB.png)
+
+While sequences for pretraining can be concatenated naively, this is not the case for SFT and instruction fine-tuning where each input sequence should be treated individually. The conventional solution is to build an extended attention mask to mark the sequence id each token belongs to, and mask out attention values between sequences.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/gGOyIt3K06cbKJwkgvW1A.png)
+
+However, this increases the complexity of attention from \\(\left(\sum_i s_i^2\right)\\) to \\(\left(\sum_i s_i\right)^2\\) where \\(s_i\\) is the length of the ith subsequence. In practice, the conventional solution puts a limit on the length of packing.
+
+Instead, [NeMo](https://docs.nvidia.com/nemo-framework/user-guide/latest/overview.html) provides a highly optimized version of sequence packing which makes use of variable-length attention kernels in FlashAttention and TransformerEngine. With this, attention values between sequences are never calculated, so the complexity of attention remains at \\(\left(\sum_i s_i^2\right)\\). This allows packing sequences to arbitrary lengths so that GPU memory can be fully utilized.
+
+All things considered, NeMo’s implementation of sequence packing provides *(on Llama 7B with Dolly dataset)*:
+- Up to 10X performance improvement in terms of FLOPs
+- Up to 6X performance improvement in terms of training time
+- No impact on model convergence
+
+### 4.5 torch.compile()
+[**torch.compile**](https://pytorch.org/get-started/pytorch-2.0/#pytorch-2x-faster-more-pythonic-and-as-dynamic-as-ever) makes PyTorch code run faster by JIT-compiling PyTorch code into optimized kernels, all while requiring minimal code changes. 
+
+Whenever you wrap your model under torch.compile, the model goes through the following steps before execution:
+1. **Graph Acquisition**: The model is broken down and re-written into subgraphs. Subgraphs that can be compiled/optimized are flattened, whereas other subgraphs which can’t be compiled fall back to the eager model.
+2. **Graph Lowering**: All PyTorch operations are decomposed into their chosen backend-specific kernels.
+3. **Graph Compilation**: All the backend kernels call their corresponding low-level device operations.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/D4BlLDnfvNUpvVfdFCd6z.png)
+
+On 163 open source models from different libraries (e.g., TIMM, TorchBench, and Hugging Face), torch.compile provided 30%-200% speedups on NVIDIA A100s.
+
+### 4.6 Multi-query Attention (MQA) and Grouped-query Attention (GQA)
+[**Multi-query Attention (MQA)**](https://arxiv.org/abs/1911.02150) and [**Grouped-query Attention (GQA)**](https://arxiv.org/abs/2305.13245) are modifications of the traditional multihead attention mechanism in Transformer models. These methods improve the efficiency and effectiveness of attention mechanisms.
+
+- **MQA** treats all attention heads as a single group, reducing computational complexity and accelerating training times. It is beneficial when model scalability or limited computational resources are concerns.
+- **GQA** groups the heads into clusters, each processing a subset of queries independently. This method balances the detailed focus of traditional multihead attention with the broad approach of MQA, enhancing nuanced input data processing.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/7DrJrVJdFxpwXhvFRuwW0.png)
+
+These attention variants offer:
+- **Reduced computational load**: Both methods decrease computation, beneficial for large models.
+- **Increased processing speed**: Simplifying attention leads to faster training and inference.
+
+## 4. Distributed Training
+
+Principally, there are two approaches to parallelism — data parallelism and model parallelism.
+
+### 4.1 DP - Data Parallelism
+Parallelization is a key strategy on training large models at scale. For a model that fits in the device memory for training, data parallelism (DP) is used to scale training to multiple devices. In DP, model parameters are replicated on each device. At each step, a mini-batch is divided evenly across all the data parallel processes, such that each process executes the forward and backward propagation on a different subset of data samples, and uses averaged gradients across processes to update the model locally.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/uZ60Sbc6Q7ZrvzQSIR1xX.png)
+
+### 4.2 Model Parallelism, Tensor Parallelism, Pipeline Parallelism
+When a model does not fit in the device memory, model parallelism split the model among processes, in vertical or horizontal way.
+
+#### 4.2.1 Naive Model Parallelism 
+This approach involves distributing groups of model layers across multiple GPUs by assigning specific layers to specific GPUs. As data flows through these layers, it is moved to the same GPU as the layer, while the other layers remain untouched.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/MrYIdXnXDTQNGbL3_8DMC.png)
+
+In this example, when data moves through layers within one GPU, it’s no different from regular forward pass. However, moving data between layers on different GPUs results in a communication overhead. If the participating GPUs are on the same compute node (e.g. same physical machine) this copying is fast, but if the GPUs are distributed across different compute nodes (e.g. multiple machines), the communication overhead could be substantially greater.
+
+The main problem with Naive Model Parallelism is that **аll but one GPU are idle at any given moment**, which is very inefficient.
+
+#### 4.2.2 Pipeline Parallelism 
+PP is almost identical to a naive MP, but it solves the GPU idling problem by chunking the incoming batch into micro-batches and artificially creating a pipeline, which allows different GPUs to concurrently participate in the computation process.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/8B1qNEhiSN8EcAb_jgxlo.png)
+
+But this comes at the expense of a great deal of technical complication.
+
+#### 4.2.3 Tensor Parallelism 
+In Tensor Parallelism, each GPU processes a slice of a tensor and only aggregates the full tensor for operations requiring it. So, unlike Model Parallelism (MP), we don't have to wait for the previous GPUs to finish processing the previous layers of the model. This allows for more efficient processing and reduced idle time.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/T3qIAk8Dba9gM_zZyOV0W.png)
+
+The main building block of any transformer is a fully connected **nn.Linear** followed by a nonlinear activation **GeLU**. The dot dot-product part of it, following the [Megatron’s paper](https://arxiv.org/abs/2104.04473) notation, can be written as **Y = GeLU(XA)**, where **X** is an input vector, **Y** is the output vector, and **A** is the weight matrix.
+
+If we look at the computation in matrix form, you can see how the matrix multiplication can be split between multiple GPUs:
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/oOGpgNvibHgLg7ST7jyH1.png)
+
+If we split the weight matrix **A** column-wise across **N** GPUs and perform matrix multiplications **XA_1** through **XA_n** in parallel, then we will end up with **N** output vectors **Y_1, Y_2, ..., Y_n** which can be fed into **GeLU** independently:
+$$ $ Y_ {1} $ , $ Y_ {2} $ ]=[GeLU( $ XA_ {1} $ ),GeLU( $ XA_ {2} $ )$$
+
+Using this principle, we can update a multi-layer perceptron of arbitrary depth, without the need for any synchronization between GPUs until the very end, where we need to reconstruct the output vector from shards. The Megatron-LM paper authors provide a helpful illustration for that:
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/k6xXMiY3m_o3s-81LXvnK.png)
+
+Parallelizing the multi-headed attention layers is even simpler, since they are already inherently parallel, due to having multiple independent heads!
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/nqdbDwvP_kVt3_wQloYzX.png)
+
+### 4.3 FSDP - Fully Sharded Data Parallel
+
+
