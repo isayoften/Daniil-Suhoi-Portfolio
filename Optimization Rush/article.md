@@ -548,3 +548,39 @@ The whole workflow can be visualized as follows:
 
 ![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/CC79O1a0bWmQ7qNBxBvjv.png)
 
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/ClwxTrIvOH5Hqx43cUfcW.png)
+
+While FSDP significantly optimizes memory usage by sharding parameters, it introduces some communication overhead due to the frequent need to gather and scatter parameters and gradients across GPUs. This overhead is a trade-off for the reduced memory footprint, and its impact can vary depending on the network bandwidth and latency between GPUs. Efficient implementation of the gather and scatter operations, along with optimizations such as overlapping communication with computation, can help mitigate this overhead to maintain high training throughput.
+
+#### 6.4.3 Sharding Strategies
+The sharding strategy is an important element in FSDP that plays a significant role in determining the memory footprint and communication overhead. FSDP offers a variety of sharding strategies, ranging from fully replicated to fully sharded.
+
+![image/png](https://cdn-uploads.huggingface.co/production/uploads/660710b03ef451aa2bab8971/iZy7KdOxL19Djdqc_-gsS.png)
+
+#### 6.4.4 Results
+FSDP attains usability and efficiency through a set of advanced techniques, including deferred initialization, flexible sharding strategies, communication overlapping and prefetching, and rate limiting communication collectives. All of these techniques are closely co-designed with other key PyTorch components to ensure the solution is sound and robust. Evaluations show that FSDP can facilitate large language models with near linear scalability.
+
+FSDP is a large and complex topic to fully understand. If you are interested in it, it is better to study the [original article](https://arxiv.org/abs/2304.11277), from which you will learn more details about the workflow, as well as see how exactly model initialization, parameter sharding and communication optimization takes place.
+
+
+## Кeferences 
+- [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)
+- [PyTorch FSDP: Experiences on Scaling Fully Sharded Data Parallel](https://arxiv.org/abs/2304.11277)
+- [PyTorch 2.x: Faster, more pythonic and as dynamic as ever](https://pytorch.org/get-started/pytorch-2.0/#pytorch-2x-faster-more-pythonic-and-as-dynamic-as-ever)
+- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)
+- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)
+- [FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision](https://tridao.me/publications/flash3/flash3.pdf)
+- [Quantization Deep Dive, или Введение в современную квантизацию](https://habr.com/ru/companies/yandex/articles/800945/)
+- [Loss Landscape | A.I deep learning explorations of morphology & dynamics](https://losslandscape.com/)
+- [Mixed Precision Training](https://arxiv.org/abs/1710.03740)
+- [Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)
+- [8-bit Optimizers via Block-wise Quantization](https://arxiv.org/abs/2110.02861)
+- [Fast Transformer Decoding: One Write-Head is All You Need](https://arxiv.org/abs/1911.02150)
+- [GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints](https://arxiv.org/abs/2305.13245)
+- [NVidia NCCL](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/overview.html)
+- [Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM](https://arxiv.org/abs/2104.04473)
+- [NVIDIA NeMo](https://docs.nvidia.com/nemo-framework/user-guide/latest/overview.html)
+- [GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323)
+- [LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale](https://arxiv.org/abs/2208.07339)
+- [Adam: A Method for Stochastic Optimization](https://arxiv.org/abs/1412.6980)
+- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)
