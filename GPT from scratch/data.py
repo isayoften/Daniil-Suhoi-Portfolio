@@ -16,7 +16,7 @@ dataset = load_dataset(
 )
 dataset = dataset.select_columns(["text"])
 
-max_seq_length = 1024
+max_seq_length = 1024 + 1 # +1 for shifted targets
 def group_texts(examples):
 
     examples = tokenizer(
@@ -45,10 +45,10 @@ dataset = dataset.map(
     batched=True,
     num_proc=os.cpu_count(),
     remove_columns=dataset.column_names,
-    batch_size=1000
+    batch_size=5000
 )
 
-dataset = dataset.train_test_split(test_size=0.05, shuffle=True, seed=42)
+dataset = dataset.train_test_split(test_size=0.025, shuffle=True, seed=42)
 
 dataset = dataset.with_format("torch")
 dataset.save_to_disk("prepared_data", num_proc=os.cpu_count())
