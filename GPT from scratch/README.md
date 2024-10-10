@@ -22,7 +22,7 @@
 - **TODO**: не сделал автоматическую подгонку даталоадера, чтобы в случае возобновления обучения с сохраненными состояниями батчи продолжались на том месте, на котором закончились - надо воткнуть "skip_first_batches" от accelerate или настроить use_stateful_dataloader=True в DataLoaderConfiguration. 
 
 
-# Requirements
+# Enviroment
 
 - OS: Ubuntu 24.05 CUDA 12.4
 - Miniconda: Conda 24.7.1 Python 3.12.4 released Aug 22, 2024. https://docs.anaconda.com/miniconda/#quick-command-line-install
