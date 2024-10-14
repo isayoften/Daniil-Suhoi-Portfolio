@@ -13,3 +13,7 @@
 - [Статья и проект про монокулярную оценку глубины](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/main/Metric%20and%20Relative%20Monocular%20Depth%20Estimation%20An%20Overview.%20Fine-Tuning%20Depth%20Anything%20V2)
   - Оценена несколькими крупными разработчиками и исследователями
   - Hugging Face планирует включить статью в свой курс по CV
+
+# [Additional files](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/main/Additional%20files)
+- Документ о прохождении курсов повышения квалификации по ИИ
+- Благодарность за помощь в подготовке участников к проекту "Сириус.ИИ"
