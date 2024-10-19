@@ -1,5 +1,5 @@
 # Optimization Rush
-Статья на HF: https://huggingface.co/blog/Isayoften/optimization-rush
+Моя статья на HF: https://huggingface.co/blog/Isayoften/optimization-rush
 
 ## Цель
 Погрузиться в теорию и практику эффективного обучения LLM, методов оптимизации.
