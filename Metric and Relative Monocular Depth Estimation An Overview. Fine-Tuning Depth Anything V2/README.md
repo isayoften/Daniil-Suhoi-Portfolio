@@ -1,4 +1,4 @@
-Статья на HF: https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide
+Моя статья на HF: https://huggingface.co/blog/Isayoften/monocular-depth-estimation-guide
 
 Ее оценили:
 - Omar Sanseviero - крупный разработчик и исследователь из HF
