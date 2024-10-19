@@ -5,14 +5,14 @@ disable_caching()
 
 
 train_data, test_data = load_dataset(
-    "HuggingFaceH4/ultrachat_200k", split=["train_sft", "test_sft"]
-)
+    "smangrul/ultrachat-10k-chatml", split=["train", "test"]
+) #small subset of the ultrachat
 
 train_data = train_data.select_columns(["messages"])
 test_data = test_data.select_columns(["messages"])
 
 
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct") #already have the correct EOS token
 
 tokenizer.pad_token = "<|finetune_right_pad_id|>"
 tokenizer.model_max_length = 2048
