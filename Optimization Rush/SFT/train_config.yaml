@@ -1,0 +1,31 @@
+output_dir: model
+neftune_noise_alpha: 5
+max_seq_length: 2048
+overwrite_output_dir: true
+per_device_train_batch_size: 1
+per_device_eval_batch_size: 4
+gradient_accumulation_steps: 1
+learning_rate: 5e-5
+weight_decay: 0.001
+max_grad_norm: 1
+num_train_epochs: 100
+lr_scheduler_type: constant
+# warmup_ratio: 0.05
+
+bf16: true
+optim: adamw_8bit
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+use_liger: true
+torch_compile: true
+dataloader_num_workers: 4
+
+logging_steps: 0.01
+# save_steps: 0.1
+# eval_steps: 0.1
+log_level: info
+# eval_strategy: steps
+save_total_limit: 1
+report_to: wandb
+seed: 42
