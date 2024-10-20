@@ -14,7 +14,7 @@
 ## 2. SFT 
 Цель - погрузиться в post-training, в SFT и DPO методы на практике. Здесь я хотел сделать full fine tuning базовой LLama-3.2-3B (без LoRA) с использованием FSDP, чтобы сделать из нее чатовую версию. 
 
-Интересные методы оптимизации, с которыми я познакомился и попробовал:
+Интересные методы оптимизации, с которыми я познакомился и попробовал (не считая тех, о которых я писал в статье):
 - **[liger_kernel](https://huggingface.co/docs/transformers/trainer#liger-kernel)**: *Liger Kernel is a collection of Triton kernels designed specifically for LLM training. It can effectively increase multi-GPU training throughput by 20% and reduces memory usage by 60%.* К сожалению, вместе с torch.compile он отказывался работать, но так как он давал больше оптимизации, я убрал compile. 
 - **[DataCollatorWithFlattening](https://huggingface.co/blog/packing-with-FA2)**: *Training with packed instruction tuning examples (without padding) is now compatible with Flash Attention 2 in Hugging Face. It can provide up to 2x improvement in training throughput while maintaining convergence quality.* Совсем свежая фишка от HF, которая использует функционал FA, чтобы упаковывать батчи без паддинга.
 - **pure bf16 training**: по заветам одной [статьи](https://arxiv.org/html/2408.15793v1), в которой говорится, что SFT почти не проседает в качестве при pure bf16 (без mixed precision), решил попробовать так же.
