@@ -14,11 +14,16 @@
 ## 2. SFT 
 Цель - погрузиться в post-training, в SFT и DPO методы на практике. Здесь я хотел сделать full fine tuning базовой LLama-3.2-3B (без LoRA) с использованием FSDP, чтобы сделать из нее чатовую версию. 
 
-Интересные методы оптимизации, не использованные ранее:
-............... 
+Интересные методы оптимизации, с которыми я познакомился и попробовал:
+- **[liger_kernel](https://huggingface.co/docs/transformers/trainer#liger-kernel)**: *Liger Kernel is a collection of Triton kernels designed specifically for LLM training. It can effectively increase multi-GPU training throughput by 20% and reduces memory usage by 60%.* К сожалению, вместе с torch.compile он отказывался работать, но так как он давал больше оптимизации, я убрал compile. 
+- **[DataCollatorWithFlattening](https://huggingface.co/blog/packing-with-FA2)**: *Training with packed instruction tuning examples (without padding) is now compatible with Flash Attention 2 in Hugging Face. It can provide up to 2x improvement in training throughput while maintaining convergence quality.* Совсем свежая фишка от HF, которая использует функционал FA, чтобы упаковывать батчи без паддинга.
+- **pure bf16 training**: по заветам одной [статьи](https://arxiv.org/html/2408.15793v1), в которой говорится, что SFT почти не проседает в качестве при pure bf16 (без mixed precision), решил попробовать так же.
+- **fsdp_activation_checkpointing**: нативный GC от FSDP вроде как лучше работает с FSDP.
+- **adamw_torch_fused**: зафьюженный оптимайзер, который работает быстрее и потребляет меньше памяти. Низкоуровневая оптимизация по аналогии с liger_kernel.
+- **train on completion only**: при sft под чаттинг логично учить модель предсказывать только те токены, которые в будущем предполагается ей генерировать, то есть мало смысла в том, чтобы учить модель предсказывать токены юзера.
 
 Результаты:
-.............
+Так как свободных нормальных карточек как обычно не было, тренил на 3x4090. Устав от этих ваших зумерских Лор и квантизаций, я решил сделать натуральный гигачадовый альфа-сигмоидный фулл файн тюн вместе с FSDP. Опять таки, цели сделать соту я не ставил, поэтому для ускорения процесса взял сабсет ультрачата на 10к семплов (чего вполне хватило, и вообще для SFT это вполне не мало). Достаточно долго чатился после обучения с моделькой (aka Alpaca eval для бомжей), и она очень хорошо себя показала (не считая того, что она постоянно думала, что ее создатель - OpenAI) 
 
 
 
