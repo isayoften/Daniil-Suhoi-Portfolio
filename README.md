@@ -1,4 +1,4 @@
-Смотри моё [резюме](https://github.com/isayoften/Daniil-Suhoi-Portfolio/blob/main/Resume.pdf)
+Смотри моё [резюме]((https://github.com/isayoften/Daniil-Suhoi-Portfolio/blob/main/Resume_ru.pdf))
 
 # Проекты
 
