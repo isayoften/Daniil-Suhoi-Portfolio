@@ -1,3 +1,4 @@
+
 import argparse
 import os
 import time
@@ -36,16 +37,16 @@ def main():
 
     config = AutoConfig.from_pretrained(args.model_name, use_cache=False)
     with device:
-        model = AutoModelForCausalLM.from_config(config, 
-                                                 torch_dtype=torch.float32, 
-                                                 attn_implementation="flash_attention_2" if args.FA else None
-                                                )
+        model = AutoModelForCausalLM.from_config(
+            config,
+            torch_dtype=torch.float32,
+            attn_implementation="flash_attention_2" if args.FA else None,
+        )
 
-    if args.gc:                                    
+    if args.gc:
         model.gradient_checkpointing_enable()
     if args.compile:
         model = torch.compile(model)
-        
 
     LOGGER.info(f"{sum(p.numel() for p in model.parameters())} model parameters")
 
@@ -88,7 +89,6 @@ def main():
         },
     )
 
-    
     global_step = 0
     log_steps_counter = 0
 
@@ -97,7 +97,7 @@ def main():
 
     torch.cuda.synchronize(device=device)
     start_time = time.time()
-    
+
     for _ in tqdm.tqdm(range(len(dataloader))):
         batch = next(batches)
         batch = {k: v.to(device=device) for k, v in batch.items()}
@@ -117,9 +117,9 @@ def main():
             torch.cuda.synchronize(device=device)
             end_time = time.time()
             total_time_per_log = end_time - start_time
-            
+
             tok_per_log_steps = args.batch_size * args.seq_length * log_steps_counter
-            
+
             info = {
                 **get_mem_stats(device),
                 "tokens_per_second": tok_per_log_steps / total_time_per_log,
@@ -130,10 +130,10 @@ def main():
 
             torch.cuda.reset_peak_memory_stats(device)
             log_steps_counter = 0
-            
+
             torch.cuda.synchronize(device=device)
             start_time = time.time()
-            
+
 
 def _seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -159,11 +159,11 @@ def _get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-name", default=None, required=True)
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--batch-size", default=1, type=int)
-    parser.add_argument("--amp", action='store_true')
-    parser.add_argument("--FA", action='store_true')
-    parser.add_argument("--fused-adam", action='store_true')
-    parser.add_argument("--compile", action='store_true')
-    parser.add_argument("--gc", action='store_true')
+    parser.add_argument("--amp", action="store_true")
+    parser.add_argument("--FA", action="store_true")
+    parser.add_argument("--fused-adam", action="store_true")
+    parser.add_argument("--compile", action="store_true")
+    parser.add_argument("--gc", action="store_true")
     parser.add_argument("--seq-length", default=2048, type=int)
     parser.add_argument("--num-samples", default=1024, type=int)
     parser.add_argument("--num-logs", default=16, type=int)
@@ -173,3 +173,4 @@ def _get_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     main()
+

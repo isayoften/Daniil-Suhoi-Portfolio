@@ -6,7 +6,6 @@ import logging
 import numpy
 import random
 import functools
-from contextlib import contextmanager
 
 
 import torch
@@ -33,6 +32,7 @@ from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
     apply_activation_checkpointing,
     checkpoint_wrapper,
+    CheckpointImpl,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -80,8 +80,6 @@ def main():
                 attn_implementation="flash_attention_2" if args.FA else None,
             )
 
-   
-
     LOGGER.info(f"{sum(p.numel() for p in model.parameters())} model parameters")
     LOGGER.info(f"Before FSDP: {get_mem_stats(device)}")
 
@@ -104,11 +102,8 @@ def main():
         auto_wrap_policy=wrap_policy,
         sharding_strategy=ShardingStrategy.FULL_SHARD,
         mixed_precision=bfSixteen,
-        use_orig_params=True
+        use_orig_params=True,
     )
-
-    # if args.compile:
-    #     model = torch.compile(model)
 
     LOGGER.info(f"After FSDP: {get_mem_stats(device)}")
     LOGGER.info(f"FSDP architecture: {model}")
@@ -116,13 +111,19 @@ def main():
     if args.gc:
         apply_activation_checkpointing(
             model,
-            checkpoint_wrapper_fn=checkpoint_wrapper,
+            checkpoint_wrapper_fn=functools.partial(
+                checkpoint_wrapper,
+                checkpoint_impl=CheckpointImpl.NO_REENTRANT,
+            ),
             auto_wrap_policy=wrap_policy,
         )
 
+    if args.compile:
+        model = torch.compile(model)
+
     train_data = torch.randint(
         low=0,
-        high=model.config.vocab_size,
+        high=128256,
         size=(args.num_samples, args.seq_length),
         dtype=torch.long,
     )
@@ -225,17 +226,6 @@ def get_mem_stats(device=None):
         "curr_resv_in_gb": 1e-9 * mem["reserved_bytes.all.current"],
         "peak_resv_in_gb": 1e-9 * mem["reserved_bytes.all.peak"],
     }
-
-
-@contextmanager
-def rank0_first():
-    rank = dist.get_rank()
-    if rank == 0:
-        yield
-    dist.barrier()
-    if rank > 0:
-        yield
-    dist.barrier()
 
 
 def _get_parser() -> argparse.ArgumentParser:

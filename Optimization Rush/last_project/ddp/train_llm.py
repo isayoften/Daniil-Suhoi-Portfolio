@@ -1,3 +1,4 @@
+
 import argparse
 import os
 import time
@@ -49,7 +50,6 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    
     config = AutoConfig.from_pretrained(args.model_name, use_cache=False)
     with device:
         model = AutoModelForCausalLM.from_config(
@@ -57,10 +57,12 @@ def main():
             torch_dtype=torch.float32,
             attn_implementation="flash_attention_2" if args.FA else None,
         )
-    if args.compile:
-        torch._dynamo.config.optimize_ddp=False #for compile compatibility
-        model = torch.compile(model)
+
     model = DistributedDataParallel(model, device_ids=[local_rank])
+
+    if args.compile:
+        torch._dynamo.config.optimize_ddp = False  # for compile compatibility
+        model = torch.compile(model)
 
     LOGGER.info(f"{sum(p.numel() for p in model.parameters())} model parameters")
 
@@ -145,7 +147,7 @@ def main():
 
             LOGGER.info(info)
             if rank == 0:
-                wandb.log(info, step=global_step * args.batch_size )
+                wandb.log(info, step=global_step * args.batch_size)
 
             torch.cuda.reset_peak_memory_stats(device)
             log_steps_counter = 0
