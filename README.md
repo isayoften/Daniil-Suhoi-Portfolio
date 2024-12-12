@@ -1,5 +1,3 @@
-Смотри моё [резюме](https://github.com/isayoften/Daniil-Suhoi-Portfolio/blob/main/Resume_ru.pdf)
-
 # Проекты
 
 - [LLMs From Scratch](https://github.com/isayoften/Daniil-Suhoi-Portfolio/tree/main/GPT%20from%20scratch)
