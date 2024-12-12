@@ -79,7 +79,7 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), fused=args.fused_adam)
 
     wandb.init(
-        project="optimization-rush",
+        project="optimization-rush-test2",
         name=args.experiment_name,
         id=args.experiment_name,
         save_code=True,
@@ -126,7 +126,7 @@ def main():
             }
 
             LOGGER.info(info)
-            wandb.log(info, step=global_step*args.batch_size)
+            wandb.log(info, step=global_step * args.batch_size * args.seq_length)
 
             torch.cuda.reset_peak_memory_stats(device)
             log_steps_counter = 0
@@ -161,10 +161,10 @@ def _get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", default=1, type=int)
     parser.add_argument("--amp", action='store_true')
     parser.add_argument("--FA", action='store_true')
-    parser.add_argument("--compile", action='store_true')
     parser.add_argument("--fused-adam", action='store_true')
+    parser.add_argument("--compile", action='store_true')
     parser.add_argument("--gc", action='store_true')
-    parser.add_argument("--seq-length", default=1024, type=int)
+    parser.add_argument("--seq-length", default=2048, type=int)
     parser.add_argument("--num-samples", default=1024, type=int)
     parser.add_argument("--num-logs", default=16, type=int)
 

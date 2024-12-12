@@ -1,12 +1,9 @@
-
 import argparse
 import os
 import time
 import logging
 import numpy
 import random
-from contextlib import contextmanager
-
 
 import torch
 from torch.utils.data import DataLoader
@@ -52,15 +49,16 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    with rank0_first():
-        config = AutoConfig.from_pretrained(args.model_name, use_cache=False)
-        with device:
-            model = AutoModelForCausalLM.from_config(
-                config,
-                torch_dtype=torch.float32,
-                attn_implementation="flash_attention_2" if args.FA else None,
-            )
+    
+    config = AutoConfig.from_pretrained(args.model_name, use_cache=False)
+    with device:
+        model = AutoModelForCausalLM.from_config(
+            config,
+            torch_dtype=torch.float32,
+            attn_implementation="flash_attention_2" if args.FA else None,
+        )
     if args.compile:
+        torch._dynamo.config.optimize_ddp=False #for compile compatibility
         model = torch.compile(model)
     model = DistributedDataParallel(model, device_ids=[local_rank])
 
@@ -68,7 +66,7 @@ def main():
 
     train_data = torch.randint(
         low=0,
-        high=model.config.vocab_size,
+        high=128256,
         size=(args.num_samples, args.seq_length),
         dtype=torch.long,
     )
@@ -147,7 +145,7 @@ def main():
 
             LOGGER.info(info)
             if rank == 0:
-                wandb.log(info, step=global_step * args.batch_size)
+                wandb.log(info, step=global_step * args.batch_size )
 
             torch.cuda.reset_peak_memory_stats(device)
             log_steps_counter = 0
@@ -174,17 +172,6 @@ def get_mem_stats(device=None):
     }
 
 
-@contextmanager
-def rank0_first():
-    rank = dist.get_rank()
-    if rank == 0:
-        yield
-    dist.barrier()
-    if rank > 0:
-        yield
-    dist.barrier()
-
-
 def _get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment-name", default=None, required=True)
@@ -193,9 +180,8 @@ def _get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", default=1, type=int)
     parser.add_argument("--amp", action="store_true")
     parser.add_argument("--FA", action="store_true")
-    parser.add_argument("--compile", action="store_true")
     parser.add_argument("--fused-adam", action="store_true")
-    parser.add_argument("--gc", action="store_true")
+    parser.add_argument("--compile", action="store_true")
     parser.add_argument("--seq-length", default=1024, type=int)
     parser.add_argument("--num-samples", default=1024, type=int)
     parser.add_argument("--num-logs", default=16, type=int)
