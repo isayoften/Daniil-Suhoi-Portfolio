@@ -72,6 +72,8 @@ SpeedUp около 20%. Memory saving около 10%. (не стал сюда д
 
 ![image](https://github.com/user-attachments/assets/02748470-c602-4558-9867-a2c93d3597b8)
 
+Итого - ускорение в 13.5x, если не считать gc. 
+
 ### DDP
 ...
 ### FSDP
