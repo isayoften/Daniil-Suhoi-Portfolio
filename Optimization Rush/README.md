@@ -1,5 +1,5 @@
-# Optimization Rush
-Моя статья на HF: https://huggingface.co/blog/Isayoften/optimization-rush
+![image](https://github.com/user-attachments/assets/cc2a26e9-b396-458d-ab83-655608d9cb50)# Optimization Rush
+Моя статья на HF по теории проекта: https://huggingface.co/blog/Isayoften/optimization-rush
 
 смотрите описание старых проектов в папке old_projects
 
@@ -33,6 +33,65 @@
 
 
 
+## Графики:
+### Single-gpu
+Использовался seq_len=2048. Не получится использовать бОльший seqlen, так как ловим OOM при отсутствии оптимизаций (без FA атеншн растет квадратично и кушает слишком много памяти)
+#### Bs = 1, No optimization vs Mixed Precision:
+SpeedUp около 3,5x. Немного выросло потребление памяти, потому что нам нужно хранить копии весов и градиентов для mp. Также bs очень маленький, что не позволяет сэкономить на активациях в bf16. 
+
+
+![image](https://github.com/user-attachments/assets/29e4ab43-87ee-4110-9bf1-08b15b78e3b4)
+![image](https://github.com/user-attachments/assets/b58be689-d72d-4c99-89d8-f7bf6c2059a1)
+
+#### + fused_adam
+SpeedUp около 10%.
+
+![image](https://github.com/user-attachments/assets/ca83e114-2405-44ff-ac2c-7e9a0a0045fb)
+![image](https://github.com/user-attachments/assets/2bb4e88a-573a-41dc-bf13-fcc19fef1abd)
+
+#### + FA
+SpeedUp около 75%. Memory saving около 30%. При бОльших значениях seqlen экономия памяти была бы больше. 
+
+![image](https://github.com/user-attachments/assets/fcfde204-3391-4818-b12f-c6034f0995d0)
+![image](https://github.com/user-attachments/assets/2cddf882-5244-4eaa-b521-163da3f6def5)
+
+#### torch.compile
+SpeedUp около 20%. Memory saving около 10%. (не стал сюда добавлять, но при mode="max_autotune" было бы еще довольно значимое ускорение и экономия памяти, взамен на сильно увеличенное время компиляции)
+
+![image](https://github.com/user-attachments/assets/205d2688-7e6a-490f-8b09-5e92577c5daa)
+![image](https://github.com/user-attachments/assets/4b44379f-440a-49f6-a6e0-5c22b0889d32)
+
+#### Увеличиваем bs=4, bs=8
+Увеличив bs, мы, с одной стороны, увеличили количество обрабатываемых токенов, но с другой стороны, эти токены должны были бы обрабатываться дольше пропорционально увеличению, то есть прибавки скорости по логике быть не должно. Но благодаря увеличению bs повышается возможность дополнительного распараллеливания, поэтому итоговая скорость растет. Рост больше всего заметен только в самом начале, при дальнейшем увеличении эта прибавка распараллеливания становится незаметной. Также из-за особенностей архитектуры видеокарт, лучше всего брать размеры батчей, которые содержат в себе много степеней 2.  
+
+![image](https://github.com/user-attachments/assets/908bc824-d588-4ab7-b887-077ae909105b)
+![image](https://github.com/user-attachments/assets/5eb93098-5062-49de-9f62-4946f77f3bb5)
+
+#### Gradient Checkpointing (aka activation checkpointing) 
+Включив gc, мы уменьшили скорость на 40%, но смогли вместить seqlen 4096, который выбивал OOM без gc. Существуют более эффективные методы (selective gc), которые позволяют наиболее оптимальным образом экономить память, но делать при этом как можно меньше перевычислений. Это достигается путем анализирования особенностей архитектуры модели. 
+
+![image](https://github.com/user-attachments/assets/02748470-c602-4558-9867-a2c93d3597b8)
+
+### DDP
+...
+### FSDP
+...
+господи храни мой кошелек после аренды 8 A100
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
+   
 
 
 
