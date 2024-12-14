@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/cc2a26e9-b396-458d-ab83-655608d9cb50)# Optimization Rush
+# Optimization Rush
 Моя статья на HF по теории проекта: https://huggingface.co/blog/Isayoften/optimization-rush
 
 смотрите описание старых проектов в папке old_projects
