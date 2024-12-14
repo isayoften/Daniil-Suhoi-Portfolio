@@ -1,4 +1,3 @@
-
 import argparse
 import os
 import time
@@ -40,7 +39,7 @@ def main():
         model = AutoModelForCausalLM.from_config(
             config,
             torch_dtype=torch.float32,
-            attn_implementation="flash_attention_2" if args.FA else None,
+            attn_implementation="flash_attention_2" if args.FA else 'eager', #actually, it's sdpa by default, which is already very close to FA (but we want to benchmark the difference)
         )
 
     if args.gc:
@@ -80,7 +79,7 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), fused=args.fused_adam)
 
     wandb.init(
-        project="optimization-rush-test2",
+        project="optimization-rush-single-gpu",
         name=args.experiment_name,
         id=args.experiment_name,
         save_code=True,
@@ -160,13 +159,13 @@ def _get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--batch-size", default=1, type=int)
     parser.add_argument("--amp", action="store_true")
-    parser.add_argument("--FA", action="store_true")
     parser.add_argument("--fused-adam", action="store_true")
+    parser.add_argument("--FA", action="store_true")
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--gc", action="store_true")
     parser.add_argument("--seq-length", default=2048, type=int)
-    parser.add_argument("--num-samples", default=1024, type=int)
-    parser.add_argument("--num-logs", default=16, type=int)
+    parser.add_argument("--num-samples", default=64, type=int)
+    parser.add_argument("--num-logs", default=8, type=int)
 
     return parser
 
