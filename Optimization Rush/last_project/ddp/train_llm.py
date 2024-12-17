@@ -61,6 +61,7 @@ def main():
     model = DistributedDataParallel(model, device_ids=[local_rank])
 
     if args.compile:
+        # torch._dynamo.config.optimize_ddp = "python_reducer_without_compiled_forward"
         torch._dynamo.config.optimize_ddp = False  # for compile compatibility
         model = torch.compile(model)
 

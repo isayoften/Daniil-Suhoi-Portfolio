@@ -119,6 +119,10 @@ def main():
         )
 
     if args.compile:
+        # for layer_id, transformer_block in model.layers.named_children():
+        #     transformer_block = torch.compile(transformer_block, fullgraph=True)
+        #     model.layers.register_module(layer_id, transformer_block)
+
         model = torch.compile(model)
 
     train_data = torch.randint(
